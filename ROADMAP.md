@@ -20,15 +20,15 @@ Build the geometry needed to answer: "Which satellites can a receiver see?"
 
 ### Features
 
-- Add a `gps_sim.ground_stations` module.
-- Create, update, list, and remove stations using latitude, longitude, altitude,
+- [ ] Add a `gps_sim.ground_stations` module.
+- [ ] Create, update, list, and remove stations using latitude, longitude, altitude,
   and minimum elevation angle.
-- Convert satellite and station positions between orbital, Earth-centred, and
+- [ ] Convert satellite and station positions between orbital, Earth-centred, and
   local horizon coordinate systems.
-- Calculate azimuth, elevation, range, and line-of-sight visibility.
-- Draw stations on Earth and highlight visible satellite links.
-- Let users select a station and inspect its live visibility table.
-- Replace the Ground stations placeholder with a guided lesson and coding
+- [ ] Calculate azimuth, elevation, range, and line-of-sight visibility.
+- [ ] Draw stations on Earth and highlight visible satellite links.
+- [ ] Let users select a station and inspect its live visibility table.
+- [ ] Replace the Ground stations placeholder with a guided lesson and coding
   challenge.
 
 ### Acceptance criteria
@@ -47,14 +47,14 @@ receiver calculate its position?"
 
 ### Features
 
-- Add a `gps_sim.measurements` module for geometric range and pseudorange.
-- Add a configurable receiver clock bias.
-- Add a `gps_sim.positioning` module with an iterative four-unknown solver for
+- [ ] Add a `gps_sim.measurements` module for geometric range and pseudorange.
+- [ ] Add a configurable receiver clock bias.
+- [ ] Add a `gps_sim.positioning` module with an iterative four-unknown solver for
   receiver position and clock bias.
-- Display the true receiver position, estimated position, residuals, and error.
-- Visualize range spheres or simplified measurement links.
-- Explain why four satellites are normally required for a 3D fix.
-- Replace the Position fixes placeholder with a worked trilateration lesson and
+- [ ] Display the true receiver position, estimated position, residuals, and error.
+- [ ] Visualize range spheres or simplified measurement links.
+- [ ] Explain why four satellites are normally required for a 3D fix.
+- [ ] Replace the Position fixes placeholder with a worked trilateration lesson and
   a solver challenge.
 
 ### Acceptance criteria
@@ -74,13 +74,13 @@ source.
 
 ### Features
 
-- Add deterministic, seedable models for satellite clock, receiver clock,
+- [ ] Add deterministic, seedable models for satellite clock, receiver clock,
   ionospheric delay, tropospheric delay, multipath, and measurement noise.
-- Allow each error source to be enabled, disabled, and scaled independently.
-- Calculate residuals, horizontal error, vertical error, and 3D position error.
-- Calculate satellite geometry metrics including GDOP, PDOP, HDOP, and VDOP.
-- Add a before/after comparison view and time-series error plot.
-- Replace the Error and accuracy placeholder with controlled experiments.
+- [ ] Allow each error source to be enabled, disabled, and scaled independently.
+- [ ] Calculate residuals, horizontal error, vertical error, and 3D position error.
+- [ ] Calculate satellite geometry metrics including GDOP, PDOP, HDOP, and VDOP.
+- [ ] Add a before/after comparison view and time-series error plot.
+- [ ] Replace the Error and accuracy placeholder with controlled experiments.
 
 ### Acceptance criteria
 
@@ -98,13 +98,13 @@ reference.
 
 ### Features
 
-- Add lesson objectives, prerequisites, estimated duration, and completion
+- [ ] Add lesson objectives, prerequisites, estimated duration, and completion
   state.
-- Add runnable code snippets that can be inserted into the editor.
-- Add lightweight checks for challenges and show focused feedback.
-- Save progress, completed challenges, and the last open lesson locally.
-- Add a reset-progress option and sample solution reveal.
-- Add a learning path covering orbit telemetry, visibility, positioning, and
+- [ ] Add runnable code snippets that can be inserted into the editor.
+- [ ] Add lightweight checks for challenges and show focused feedback.
+- [ ] Save progress, completed challenges, and the last open lesson locally.
+- [ ] Add a reset-progress option and sample solution reveal.
+- [ ] Add a learning path covering orbit telemetry, visibility, positioning, and
   accuracy.
 
 ### Acceptance criteria
@@ -122,13 +122,13 @@ Make experiments easier to set up, repeat, and share.
 
 ### Features
 
-- Add play, pause, step, simulation-time, and speed controls.
-- Allow constellation and receiver parameters to be edited in the UI.
-- Save and load versioned scenario files.
-- Ship example scenarios for strong geometry, poor geometry, clock bias,
+- [ ] Add play, pause, step, simulation-time, and speed controls.
+- [ ] Allow constellation and receiver parameters to be edited in the UI.
+- [ ] Save and load versioned scenario files.
+- [ ] Ship example scenarios for strong geometry, poor geometry, clock bias,
   atmospheric delay, and multipath.
-- Add a reset-to-lesson-state action.
-- Export telemetry and experiment results as CSV or JSON.
+- [ ] Add a reset-to-lesson-state action.
+- [ ] Export telemetry and experiment results as CSV or JSON.
 
 ### Acceptance criteria
 
@@ -143,16 +143,16 @@ Make experiments easier to set up, repeat, and share.
 
 ### Features
 
-- Move orbital and coordinate calculations out of `app.py` into headless model
+- [ ] Move orbital and coordinate calculations out of `app.py` into headless model
   modules.
-- Separate simulation state from Tkinter rendering.
-- Add unit tests for dynamics, coordinates, visibility, measurements, solvers,
+- [ ] Separate simulation state from Tkinter rendering.
+- [ ] Add unit tests for dynamics, coordinates, visibility, measurements, solvers,
   errors, and scenario serialization.
-- Add integration tests for the editor-facing API.
-- Make standard test discovery run the full suite.
-- Run tests and executable smoke checks in GitHub Actions before publishing.
-- Add updater integrity verification using release checksums.
-- Add structured release notes and migration handling for saved scenarios.
+- [ ] Add integration tests for the editor-facing API.
+- [ ] Make standard test discovery run the full suite.
+- [ ] Run tests and executable smoke checks in GitHub Actions before publishing.
+- [ ] Add updater integrity verification using release checksums.
+- [ ] Add structured release notes and migration handling for saved scenarios.
 
 ### Acceptance criteria
 
