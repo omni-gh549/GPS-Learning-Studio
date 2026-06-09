@@ -7,8 +7,10 @@ A dependency-free Python desktop application with:
 - A syntax-highlighted Python editor
 - Named simulator modules with explicit imports
 - Function suggestions and autocomplete
-- Expandable in-app documentation
+- Multi-page in-app documentation with lessons, API references, and placeholders
 - Open, save, and run controls
+
+See [ROADMAP.md](ROADMAP.md) for the prioritized feature plan.
 
 ## Run
 
@@ -17,6 +19,34 @@ Double-click `launch.bat`, or run:
 ```powershell
 python app.py
 ```
+
+## Windows executable and updates
+
+Build the portable executable with:
+
+```powershell
+python -m pip install pyinstaller
+pyinstaller --clean GPS-Learning-Studio.spec
+```
+
+The result is `dist\GPS-Learning-Studio.exe`. Packaged builds check the latest
+GitHub Release shortly after startup and can download, replace, and restart
+themselves when a newer version is available.
+
+Run the updater integration test with:
+
+```powershell
+python -m unittest tests.test_updater -v
+```
+
+To publish a new version:
+
+1. Update `CURRENT_VERSION` in `gps_sim\updater.py`.
+2. Commit and push the feature.
+3. Tag the commit with the matching version, such as `v1.1.0`, and push the tag.
+
+The GitHub Actions release workflow builds the Windows executable and attaches
+it to the release automatically.
 
 Editor shortcuts:
 

@@ -17,6 +17,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog
 
 from gps_sim.runtime import bind_visualizer
+from gps_sim.updater import CURRENT_VERSION, download_and_install, find_update, is_packaged
 
 
 BG = "#242628"
@@ -49,14 +50,108 @@ SIMULATOR_COMPLETIONS = (
     ("abs(number)  e.g. abs(error)", "abs(error)", "#c59bcf"),
 )
 
-DOCUMENTATION = (
-    ("GPS Learning Studio", "Write and run Python while inspecting a live orbital simulation."),
-    ("Getting started", "Simulator functions live in named modules. Import the module you need before calling its functions. Press F5 to run the editor."),
-    ("Constellation telemetry", "import gps_sim.constellation as constellation\n\nconstellation.get_satellite_states()\nReturns the current ID, inclination, ascending node, and orbital angle for each satellite.\n\nconstellation.get_satellite_count()\nReturns the number of satellites in the active constellation."),
-    ("Simulation dynamics", "import gps_sim.dynamics as dynamics\n\ndynamics.set_orbital_time_scale(2.0)\nChanges the orbital propagation speed.\n\ndynamics.set_earth_rotation_scale(0.5)\nChanges the Earth rotation rate.\n\ndynamics.reset_simulation()\nRestores the camera and both time scales."),
-    ("Editor", "Function suggestions appear automatically above the cursor as you type imports, module names, or functions. Use Up/Down to choose, Enter or Tab to insert, and Escape to close."),
-    ("Orbital view", "Drag with the left mouse button to rotate the camera. Hover a satellite dot to show its Globalstar ID. The four satellites use realistic 113-116 minute orbital periods."),
-    ("Files and output", "Open loads a Python file. Import inserts a standard Python import. Save writes the current script. Run or F5 executes it and displays stdout, stderr, and tracebacks below the editor."),
+@dataclass(frozen=True)
+class DocumentationPage:
+    title: str
+    eyebrow: str
+    summary: str
+    sections: tuple[tuple[str, str], ...]
+    placeholder: bool = False
+
+
+DOCUMENTATION_PAGES = (
+    DocumentationPage(
+        "Welcome",
+        "START HERE",
+        "Learn Python by changing a live orbital simulation and reading its telemetry.",
+        (
+            ("Your workspace", "The left pane is a rotatable model of Earth and the active satellite constellation. The right pane is a Python editor with output below it."),
+            ("First run", "Press F5 or choose Run. The starter script imports the constellation module, reads every satellite state, and prints the result."),
+            ("A good next experiment", "Change the script so it prints only each satellite ID and orbital angle. Run it several times and watch the angles advance."),
+        ),
+    ),
+    DocumentationPage(
+        "Quick start",
+        "5 MINUTE LESSON",
+        "Run a script, inspect changing telemetry, and speed up the simulation.",
+        (
+            ("1. Read the constellation", "import gps_sim.constellation as constellation\n\nfor satellite in constellation.get_satellite_states():\n    print(satellite[\"id\"], satellite[\"orbital_angle_degrees\"])"),
+            ("2. Change time", "import gps_sim.dynamics as dynamics\n\ndynamics.set_orbital_time_scale(20.0)"),
+            ("3. Reset", "dynamics.reset_simulation()\n\nReset restores both time scales and returns the camera to its starting angle."),
+        ),
+    ),
+    DocumentationPage(
+        "Constellation API",
+        "API REFERENCE",
+        "Read the size and current propagated state of the simulated constellation.",
+        (
+            ("Import", "import gps_sim.constellation as constellation"),
+            ("get_satellite_states()", "constellation.get_satellite_states()\n\nReturns a list of dictionaries. Each dictionary contains id, inclination_degrees, longitude_of_ascending_node_degrees, and orbital_angle_degrees."),
+            ("get_satellite_count()", "constellation.get_satellite_count()\n\nReturns the number of satellites in the active constellation."),
+        ),
+    ),
+    DocumentationPage(
+        "Dynamics API",
+        "API REFERENCE",
+        "Control orbital propagation, Earth rotation, and simulation reset.",
+        (
+            ("Import", "import gps_sim.dynamics as dynamics"),
+            ("set_orbital_time_scale(multiplier)", "dynamics.set_orbital_time_scale(2.0)\n\nSets orbital speed. Use 1.0 for real time, a larger number to accelerate, or 0.0 to pause the satellites."),
+            ("set_earth_rotation_scale(multiplier)", "dynamics.set_earth_rotation_scale(0.5)\n\nSets the visual Earth rotation speed independently of satellite motion."),
+            ("reset_simulation()", "dynamics.reset_simulation()\n\nRestores the camera and both time scales to their defaults."),
+        ),
+    ),
+    DocumentationPage(
+        "Editor and files",
+        "WORKSPACE GUIDE",
+        "Use the editor like a small Python lab built around the simulation.",
+        (
+            ("Suggestions", "Function suggestions appear while you type imports, module names, or functions. Use Up and Down to select, Enter or Tab to insert, and Escape to close."),
+            ("Files", "Open loads a Python file. Import inserts a standard Python import. Save writes the current script to disk."),
+            ("Run and output", "Run or F5 executes the editor. Printed values, errors, and tracebacks appear in the output pane. Ctrl+S saves and Ctrl+O opens a script."),
+        ),
+    ),
+    DocumentationPage(
+        "Orbital view",
+        "VISUALIZER GUIDE",
+        "Connect the values in your code to motion in the model.",
+        (
+            ("Camera", "Hold the left mouse button and drag to rotate the view around Earth."),
+            ("Satellites", "Hover a satellite marker to display its Globalstar ID. Each colored marker follows its own inclined orbital plane."),
+            ("Time", "The four satellites use 113-116 minute orbital periods. Increase the orbital time scale to make changes easier to observe during a lesson."),
+        ),
+    ),
+    DocumentationPage(
+        "Challenge: Find the leader",
+        "PRACTICE",
+        "Use list processing to find the satellite with the greatest orbital angle.",
+        (
+            ("Task", "Read the satellite states, find the dictionary with the largest orbital_angle_degrees value, and print its ID."),
+            ("Hint", "states = constellation.get_satellite_states()\nleader = max(states, key=lambda satellite: satellite[\"orbital_angle_degrees\"])\nprint(leader[\"id\"])"),
+            ("Stretch goal", "Sort all satellites by orbital angle and print a numbered leaderboard."),
+        ),
+    ),
+    DocumentationPage(
+        "Ground stations",
+        "COMING SOON",
+        "Model station coordinates, elevation masks, and satellite visibility windows.",
+        (("Planned page", "This lesson will introduce latitude and longitude, line of sight, elevation angle, and simple pass prediction."),),
+        placeholder=True,
+    ),
+    DocumentationPage(
+        "Position fixes",
+        "COMING SOON",
+        "Estimate a receiver position from simulated pseudorange measurements.",
+        (("Planned page", "This lesson will cover range measurements, clock bias, trilateration, and the geometry needed for a four-satellite fix."),),
+        placeholder=True,
+    ),
+    DocumentationPage(
+        "Error and accuracy",
+        "COMING SOON",
+        "Explore timing error, atmospheric delay, multipath, and dilution of precision.",
+        (("Planned page", "This lesson will turn common GPS error sources on and off, then compare their effect on the calculated position."),),
+        placeholder=True,
+    ),
 )
 
 
@@ -216,10 +311,11 @@ class DarkScrollbar(tk.Canvas):
 
 class DocumentationPanel(tk.Frame):
     def __init__(self, master: tk.Misc, close_command):
-        super().__init__(master, bg=PANEL, width=330)
+        super().__init__(master, bg=PANEL, width=390)
         self.grid_propagate(False)
-        self.grid_rowconfigure(1, weight=1)
+        self.grid_rowconfigure(2, weight=1)
         self.grid_columnconfigure(0, weight=1)
+        self.current_page = 0
 
         header = tk.Frame(self, bg=PANEL)
         header.grid(row=0, column=0, sticky="ew", padx=18, pady=(18, 10))
@@ -234,47 +330,114 @@ class DocumentationPanel(tk.Frame):
         close.pack(side="right")
         close.bind("<Button-1>", lambda _event: close_command())
 
+        navigation = tk.Frame(self, bg=PANEL)
+        navigation.grid(row=1, column=0, sticky="ew", padx=18, pady=(0, 12))
+        navigation.grid_columnconfigure(1, weight=1)
+        self.previous_button = RoundedButton(
+            navigation, "Back", lambda: self.show_page(self.current_page - 1),
+            width=54, height=27,
+        )
+        self.previous_button.grid(row=0, column=0, sticky="w")
+        self.page_status = tk.Label(
+            navigation, bg=PANEL, fg=MUTED, font=("Segoe UI", 8),
+        )
+        self.page_status.grid(row=0, column=1)
+        self.next_button = RoundedButton(
+            navigation, "Next", lambda: self.show_page(self.current_page + 1),
+            width=54, height=27,
+        )
+        self.next_button.grid(row=0, column=2, sticky="e")
+
         body_frame = tk.Frame(self, bg=PANEL)
-        body_frame.grid(row=1, column=0, sticky="nsew", padx=(18, 8), pady=(0, 18))
-        body_frame.grid_rowconfigure(0, weight=1)
-        body_frame.grid_columnconfigure(0, weight=1)
-        body = tk.Text(
+        body_frame.grid(row=2, column=0, sticky="nsew", padx=(18, 8), pady=(0, 18))
+        body_frame.grid_rowconfigure(1, weight=1)
+        body_frame.grid_columnconfigure(1, weight=1)
+
+        self.page_list = tk.Listbox(
+            body_frame, width=18, bg="#252729", fg="#aeb3b7",
+            selectbackground="#41515d", selectforeground="#ffffff",
+            relief="flat", bd=0, highlightthickness=0, activestyle="none",
+            font=("Segoe UI", 9), exportselection=False,
+        )
+        self.page_list.grid(row=0, column=0, rowspan=2, sticky="ns", padx=(0, 12))
+        for page in DOCUMENTATION_PAGES:
+            marker = "  " if not page.placeholder else "+ "
+            self.page_list.insert("end", marker + page.title)
+        self.page_list.bind("<<ListboxSelect>>", self._select_page)
+
+        self.body = tk.Text(
             body_frame, bg=PANEL, fg=TEXT, relief="flat", bd=0,
             padx=0, pady=0, wrap="word", cursor="arrow",
             font=("Segoe UI", 9), spacing1=1, spacing3=3,
         )
-        body.grid(row=0, column=0, sticky="nsew")
-        scroll = DarkScrollbar(body_frame, command=body.yview)
-        scroll.grid(row=0, column=1, sticky="ns", padx=(8, 0))
-        body.configure(yscrollcommand=scroll.set)
-        body.tag_configure(
+        self.body.grid(row=1, column=1, sticky="nsew")
+        scroll = DarkScrollbar(body_frame, command=self.body.yview)
+        scroll.grid(row=1, column=2, sticky="ns", padx=(8, 0))
+        self.body.configure(yscrollcommand=scroll.set)
+        self.body.tag_configure(
+            "eyebrow", foreground="#7db6a6", font=("Segoe UI", 8, "bold"),
+            spacing3=5,
+        )
+        self.body.tag_configure(
             "title", foreground="#eef0f2", font=("Segoe UI", 16, "bold"),
             spacing1=2, spacing3=8,
         )
-        body.tag_configure(
+        self.body.tag_configure(
+            "summary", foreground="#c5c9cc", font=("Segoe UI", 10),
+            spacing3=12,
+        )
+        self.body.tag_configure(
             "heading", foreground=ACCENT, font=("Segoe UI", 10, "bold"),
             spacing1=15, spacing3=5,
         )
-        body.tag_configure(
+        self.body.tag_configure(
             "body", foreground="#b9bdc1", font=("Segoe UI", 9),
             lmargin1=0, lmargin2=0, spacing3=2,
         )
-        body.tag_configure(
+        self.body.tag_configure(
             "code", foreground="#c7d5b1", background="#252729",
             font=("Cascadia Mono", 9), lmargin1=7, lmargin2=7,
             rmargin=7, spacing1=4, spacing3=4,
         )
-        for index, (heading, content) in enumerate(DOCUMENTATION):
-            body.insert("end", heading + "\n", "title" if index == 0 else "heading")
+        self.show_page(0)
+
+    def _select_page(self, _event: tk.Event) -> None:
+        selection = self.page_list.curselection()
+        if selection:
+            self.show_page(selection[0])
+
+    def show_page(self, index: int) -> None:
+        index = max(0, min(len(DOCUMENTATION_PAGES) - 1, index))
+        self.current_page = index
+        page = DOCUMENTATION_PAGES[index]
+        self.page_list.selection_clear(0, "end")
+        self.page_list.selection_set(index)
+        self.page_list.activate(index)
+        self.page_list.see(index)
+        self.page_status.configure(text=f"{index + 1} / {len(DOCUMENTATION_PAGES)}")
+
+        self.body.configure(state="normal")
+        self.body.delete("1.0", "end")
+        self.body.insert("end", page.eyebrow + "\n", "eyebrow")
+        self.body.insert("end", page.title + "\n", "title")
+        self.body.insert("end", page.summary + "\n", "summary")
+        for heading, content in page.sections:
+            self.body.insert("end", heading + "\n", "heading")
             for line in content.splitlines():
                 is_code = (
                     line.startswith("import ")
                     or line.startswith("constellation.")
                     or line.startswith("dynamics.")
+                    or line.startswith("states =")
+                    or line.startswith("leader =")
+                    or line.startswith("print(")
+                    or line.startswith("for ")
+                    or line.startswith("    ")
                 )
-                body.insert("end", line + "\n", "code" if is_code else "body")
-            body.insert("end", "\n", "body")
-        body.configure(state="disabled")
+                self.body.insert("end", line + "\n", "code" if is_code else "body")
+            self.body.insert("end", "\n", "body")
+        self.body.configure(state="disabled")
+        self.body.yview_moveto(0)
 
 
 @dataclass
@@ -720,6 +883,7 @@ class OrbitStudio(tk.Tk):
         bind_visualizer(self.visualizer)
         self.after_idle(self._set_initial_split_positions)
         self.after(50, self._poll_output)
+        self.after(1500, self.check_for_updates)
 
     def _build_ui(self) -> None:
         shell = tk.Frame(self, bg=BG)
@@ -736,6 +900,15 @@ class OrbitStudio(tk.Tk):
             rail, text="DOCS", bg=BG, fg="#73787d",
             font=("Segoe UI", 7, "bold"),
         ).pack(side="top", pady=(4, 0))
+        self.update_button = RoundedButton(
+            rail, text="Update", command=lambda: self.check_for_updates(manual=True),
+            width=48, height=28,
+        )
+        self.update_button.pack(side="bottom", pady=(0, 3))
+        tk.Label(
+            rail, text=f"v{CURRENT_VERSION}", bg=BG, fg="#73787d",
+            font=("Segoe UI", 7),
+        ).pack(side="bottom", pady=(0, 5))
 
         self.workspace_split = tk.PanedWindow(
             shell, orient="horizontal", bg=BG, bd=0, relief="flat",
@@ -871,7 +1044,7 @@ class OrbitStudio(tk.Tk):
         if self.documentation_open:
             self.workspace_split.add(
                 self.documentation_panel, before=self.content_split,
-                width=330, minsize=230, stretch="never",
+                width=390, minsize=330, stretch="never",
             )
         else:
             self.workspace_split.forget(self.documentation_panel)
@@ -889,6 +1062,63 @@ class OrbitStudio(tk.Tk):
             ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, 35, ctypes.byref(color), 4)
         except (AttributeError, OSError):
             pass
+
+    def check_for_updates(self, manual: bool = False) -> None:
+        if manual and not is_packaged():
+            messagebox.showinfo(
+                "Updates",
+                "Automatic updates are enabled in the packaged Windows application.",
+                parent=self,
+            )
+            return
+
+        def worker() -> None:
+            try:
+                release = find_update()
+            except Exception as error:
+                if manual:
+                    self.after(
+                        0,
+                        lambda error=error: messagebox.showerror(
+                            "Update check failed", str(error), parent=self
+                        ),
+                    )
+                return
+            self.after(0, lambda: self._handle_update_result(release, manual))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _handle_update_result(self, release, manual: bool) -> None:
+        if release is None:
+            if manual:
+                messagebox.showinfo(
+                    "Updates",
+                    f"GPS Learning Studio v{CURRENT_VERSION} is up to date.",
+                    parent=self,
+                )
+            return
+        install = messagebox.askyesno(
+            "Update available",
+            f"GPS Learning Studio v{release.version} is available.\n\n"
+            "Download, install, and restart now?",
+            parent=self,
+        )
+        if not install:
+            return
+        self._set_output(f"Downloading GPS Learning Studio v{release.version}...\n")
+
+        def install_worker() -> None:
+            try:
+                download_and_install(release)
+            except Exception as error:
+                self.after(
+                    0,
+                    lambda error=error: messagebox.showerror(
+                        "Update failed", str(error), parent=self
+                    ),
+                )
+
+        threading.Thread(target=install_worker, daemon=True).start()
 
     def insert_import(self) -> None:
         module = simpledialog.askstring("Import module", "Python module name:", parent=self)
