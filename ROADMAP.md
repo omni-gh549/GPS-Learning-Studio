@@ -21,7 +21,7 @@ Build the geometry needed to answer: "Which satellites can a receiver see?"
 ### Features
 
 - [x] Add a `gps_sim.ground_stations` module.
-- [ ] Create, update, list, and remove stations using latitude, longitude, altitude,
+- [x] Create, update, list, and remove stations using latitude, longitude, altitude,
   and minimum elevation angle.
 - [ ] Convert satellite and station positions between orbital, Earth-centred, and
   local horizon coordinate systems.

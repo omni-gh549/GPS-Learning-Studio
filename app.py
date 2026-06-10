@@ -40,6 +40,10 @@ SIMULATOR_COMPLETIONS = (
     ("dynamics.set_earth_rotation_scale(0.5)", "dynamics.set_earth_rotation_scale(0.5)", "#d7a86e"),
     ("dynamics.reset_simulation()", "dynamics.reset_simulation()", "#d7a86e"),
     ("ground_stations.GroundStation(0.0, 0.0)", "ground_stations.GroundStation(0.0, 0.0)", "#7db6a6"),
+    ("ground_stations.create_station(\"Home\", 0.0, 0.0)", "ground_stations.create_station(\"Home\", 0.0, 0.0)", "#7db6a6"),
+    ("ground_stations.update_station(\"Home\", altitude_meters=10.0)", "ground_stations.update_station(\"Home\", altitude_meters=10.0)", "#7db6a6"),
+    ("ground_stations.list_stations()  -> dict", "ground_stations.list_stations()", "#7db6a6"),
+    ("ground_stations.remove_station(\"Home\")", "ground_stations.remove_station(\"Home\")", "#7db6a6"),
     ("print(value)  e.g. print(\"Satellite state\")", "print()", "#c59bcf"),
     ("len(iterable)  e.g. len(states)", "len()", "#c59bcf"),
     ("range(stop)  e.g. range(4)", "range(4)", "#c59bcf"),
@@ -106,10 +110,14 @@ DOCUMENTATION_PAGES = (
     DocumentationPage(
         "Ground stations API",
         "API REFERENCE",
-        "Represent a stationary receiver using validated geodetic inputs.",
+        "Create and manage named stationary receivers using validated geodetic inputs.",
         (
             ("Import", "import gps_sim.ground_stations as ground_stations"),
             ("GroundStation(...)", "station = ground_stations.GroundStation(\n    latitude_degrees=57.1497,\n    longitude_degrees=-2.0943,\n    altitude_meters=65.0,\n    minimum_elevation_degrees=10.0,\n)\n\nLatitude and longitude are expressed in degrees, altitude in meters, and the elevation mask in degrees. Coordinates and masks are validated when the immutable station is constructed."),
+            ("create_station(...)", "ground_stations.create_station(\"Aberdeen\", 57.1497, -2.0943, 65.0, 10.0)\n\nCreates a validated station under a unique name and returns it."),
+            ("update_station(...)", "ground_stations.update_station(\"Aberdeen\", minimum_elevation_degrees=15.0)\n\nUpdates only the supplied fields and returns a new immutable station."),
+            ("list_stations()", "stations = ground_stations.list_stations()\nprint(stations)\n\nReturns a dictionary snapshot keyed by station name."),
+            ("remove_station(name)", "removed = ground_stations.remove_station(\"Aberdeen\")\n\nRemoves and returns the named station."),
         ),
     ),
     DocumentationPage(

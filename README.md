@@ -80,17 +80,22 @@ dynamics.set_orbital_time_scale(2.0)
 dynamics.set_earth_rotation_scale(0.5)
 dynamics.reset_simulation()
 
-station = ground_stations.GroundStation(
+station = ground_stations.create_station(
+    "Aberdeen",
     latitude_degrees=57.1497,
     longitude_degrees=-2.0943,
     altitude_meters=65.0,
     minimum_elevation_degrees=10.0,
 )
+ground_stations.update_station("Aberdeen", minimum_elevation_degrees=15.0)
+print(ground_stations.list_stations())
+ground_stations.remove_station("Aberdeen")
 ```
 
 `GroundStation` validates latitude, longitude, altitude, and elevation-mask
-inputs without starting the Tkinter application. Station management and
-visibility calculations are tracked as separate roadmap features.
+inputs without starting the Tkinter application. Named stations can be created,
+updated, listed, and removed through the same headless module. Visibility
+calculations are tracked as a separate roadmap feature.
 
 Click the documentation icon in the left sidebar for descriptions of the
 simulator, editor, file controls, and every public simulator function.

@@ -5,7 +5,12 @@ a = Analysis(
     pathex=[],
     binaries=[],
     datas=[],
-    hiddenimports=["gps_sim.constellation", "gps_sim.dynamics", "gps_sim.runtime"],
+    hiddenimports=[
+        "gps_sim.constellation",
+        "gps_sim.dynamics",
+        "gps_sim.ground_stations",
+        "gps_sim.runtime",
+    ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
