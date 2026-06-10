@@ -71,6 +71,7 @@ Import the module required by the functions you use:
 ```python
 import gps_sim.constellation as constellation
 import gps_sim.dynamics as dynamics
+import gps_sim.ground_stations as ground_stations
 
 print(constellation.get_satellite_states())
 print(constellation.get_satellite_count())
@@ -78,7 +79,18 @@ print(constellation.get_satellite_count())
 dynamics.set_orbital_time_scale(2.0)
 dynamics.set_earth_rotation_scale(0.5)
 dynamics.reset_simulation()
+
+station = ground_stations.GroundStation(
+    latitude_degrees=57.1497,
+    longitude_degrees=-2.0943,
+    altitude_meters=65.0,
+    minimum_elevation_degrees=10.0,
+)
 ```
+
+`GroundStation` validates latitude, longitude, altitude, and elevation-mask
+inputs without starting the Tkinter application. Station management and
+visibility calculations are tracked as separate roadmap features.
 
 Click the documentation icon in the left sidebar for descriptions of the
 simulator, editor, file controls, and every public simulator function.

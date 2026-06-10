@@ -33,11 +33,13 @@ SATELLITE_COLORS = ("#d7a86e", "#7db6a6", "#b58dc7", "#d6cc75")
 SIMULATOR_COMPLETIONS = (
     ("import gps_sim.constellation as constellation", "import gps_sim.constellation as constellation", "#8eb6d8"),
     ("import gps_sim.dynamics as dynamics", "import gps_sim.dynamics as dynamics", "#8eb6d8"),
+    ("import gps_sim.ground_stations as ground_stations", "import gps_sim.ground_stations as ground_stations", "#8eb6d8"),
     ("constellation.get_satellite_states()  -> list[dict]", "constellation.get_satellite_states()", "#7db6a6"),
     ("constellation.get_satellite_count()  -> int", "constellation.get_satellite_count()", "#7db6a6"),
     ("dynamics.set_orbital_time_scale(2.0)", "dynamics.set_orbital_time_scale(2.0)", "#d7a86e"),
     ("dynamics.set_earth_rotation_scale(0.5)", "dynamics.set_earth_rotation_scale(0.5)", "#d7a86e"),
     ("dynamics.reset_simulation()", "dynamics.reset_simulation()", "#d7a86e"),
+    ("ground_stations.GroundStation(0.0, 0.0)", "ground_stations.GroundStation(0.0, 0.0)", "#7db6a6"),
     ("print(value)  e.g. print(\"Satellite state\")", "print()", "#c59bcf"),
     ("len(iterable)  e.g. len(states)", "len()", "#c59bcf"),
     ("range(stop)  e.g. range(4)", "range(4)", "#c59bcf"),
@@ -99,6 +101,15 @@ DOCUMENTATION_PAGES = (
             ("set_orbital_time_scale(multiplier)", "dynamics.set_orbital_time_scale(2.0)\n\nSets orbital speed. Use 1.0 for real time, a larger number to accelerate, or 0.0 to pause the satellites."),
             ("set_earth_rotation_scale(multiplier)", "dynamics.set_earth_rotation_scale(0.5)\n\nSets the visual Earth rotation speed independently of satellite motion."),
             ("reset_simulation()", "dynamics.reset_simulation()\n\nRestores the camera and both time scales to their defaults."),
+        ),
+    ),
+    DocumentationPage(
+        "Ground stations API",
+        "API REFERENCE",
+        "Represent a stationary receiver using validated geodetic inputs.",
+        (
+            ("Import", "import gps_sim.ground_stations as ground_stations"),
+            ("GroundStation(...)", "station = ground_stations.GroundStation(\n    latitude_degrees=57.1497,\n    longitude_degrees=-2.0943,\n    altitude_meters=65.0,\n    minimum_elevation_degrees=10.0,\n)\n\nLatitude and longitude are expressed in degrees, altitude in meters, and the elevation mask in degrees. Coordinates and masks are validated when the immutable station is constructed."),
         ),
     ),
     DocumentationPage(
@@ -428,6 +439,8 @@ class DocumentationPanel(tk.Frame):
                     line.startswith("import ")
                     or line.startswith("constellation.")
                     or line.startswith("dynamics.")
+                    or line.startswith("ground_stations.")
+                    or line.startswith("station =")
                     or line.startswith("states =")
                     or line.startswith("leader =")
                     or line.startswith("print(")
