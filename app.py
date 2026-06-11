@@ -32,6 +32,7 @@ SATELLITE_COLORS = ("#d7a86e", "#7db6a6", "#b58dc7", "#d6cc75")
 
 SIMULATOR_COMPLETIONS = (
     ("import gps_sim.constellation as constellation", "import gps_sim.constellation as constellation", "#8eb6d8"),
+    ("import gps_sim.coordinates as coordinates", "import gps_sim.coordinates as coordinates", "#8eb6d8"),
     ("import gps_sim.dynamics as dynamics", "import gps_sim.dynamics as dynamics", "#8eb6d8"),
     ("import gps_sim.ground_stations as ground_stations", "import gps_sim.ground_stations as ground_stations", "#8eb6d8"),
     ("constellation.get_satellite_states()  -> list[dict]", "constellation.get_satellite_states()", "#7db6a6"),
@@ -44,6 +45,9 @@ SIMULATOR_COMPLETIONS = (
     ("ground_stations.update_station(\"Home\", altitude_meters=10.0)", "ground_stations.update_station(\"Home\", altitude_meters=10.0)", "#7db6a6"),
     ("ground_stations.list_stations()  -> dict", "ground_stations.list_stations()", "#7db6a6"),
     ("ground_stations.remove_station(\"Home\")", "ground_stations.remove_station(\"Home\")", "#7db6a6"),
+    ("coordinates.orbital_to_eci(...)", "coordinates.orbital_to_eci(26560000.0, 55.0, 0.0, 0.0)", "#7db6a6"),
+    ("coordinates.eci_to_ecef(...)", "coordinates.eci_to_ecef(eci, 0.0)", "#7db6a6"),
+    ("coordinates.ecef_to_local_horizon(...)", "coordinates.ecef_to_local_horizon(ecef, station)", "#7db6a6"),
     ("print(value)  e.g. print(\"Satellite state\")", "print()", "#c59bcf"),
     ("len(iterable)  e.g. len(states)", "len()", "#c59bcf"),
     ("range(stop)  e.g. range(4)", "range(4)", "#c59bcf"),
@@ -118,6 +122,18 @@ DOCUMENTATION_PAGES = (
             ("update_station(...)", "ground_stations.update_station(\"Aberdeen\", minimum_elevation_degrees=15.0)\n\nUpdates only the supplied fields and returns a new immutable station."),
             ("list_stations()", "stations = ground_stations.list_stations()\nprint(stations)\n\nReturns a dictionary snapshot keyed by station name."),
             ("remove_station(name)", "removed = ground_stations.remove_station(\"Aberdeen\")\n\nRemoves and returns the named station."),
+        ),
+    ),
+    DocumentationPage(
+        "Coordinates API",
+        "API REFERENCE",
+        "Convert circular satellite orbits and WGS84 stations through inertial, Earth-fixed, and local horizon frames.",
+        (
+            ("Import", "import gps_sim.coordinates as coordinates"),
+            ("orbital_to_eci(...)", "eci = coordinates.orbital_to_eci(\n    radius_meters=26_560_000.0,\n    inclination_degrees=55.0,\n    longitude_of_ascending_node_degrees=30.0,\n    orbital_angle_degrees=120.0,\n)\n\nReturns a CartesianPosition in the Earth-centred inertial frame. The educational orbit model assumes a circular orbit."),
+            ("eci_to_ecef(...)", "ecef = coordinates.eci_to_ecef(eci, earth_rotation_degrees=15.0)\n\nRotates an inertial position into the Earth-centred, Earth-fixed frame. Use ecef_to_eci(...) for the inverse conversion."),
+            ("station_to_ecef(station)", "station_ecef = coordinates.station_to_ecef(station)\n\nConverts a GroundStation latitude, longitude, and altitude to a WGS84 Earth-fixed position."),
+            ("ecef_to_local_horizon(...)", "local = coordinates.ecef_to_local_horizon(ecef, station)\nprint(local.east_meters, local.north_meters, local.up_meters)\n\nReturns station-centred east, north, and up coordinates. Use local_horizon_to_ecef(...) for the inverse conversion."),
         ),
     ),
     DocumentationPage(
@@ -708,7 +724,9 @@ class PythonHighlighter:
             ("builtin", re.compile(r"\b(?:" + "|".join(map(re.escape, dir(builtins))) + r")\b")),
             ("sim_function", re.compile(
                 r"\b(?:get_satellite_states|get_satellite_count|"
-                r"set_orbital_time_scale|set_earth_rotation_scale|reset_simulation)\b"
+                r"set_orbital_time_scale|set_earth_rotation_scale|reset_simulation|"
+                r"orbital_to_eci|eci_to_ecef|ecef_to_eci|station_to_ecef|"
+                r"ecef_to_local_horizon|local_horizon_to_ecef)\b"
             )),
         ]
         colors = {

@@ -70,6 +70,7 @@ Import the module required by the functions you use:
 
 ```python
 import gps_sim.constellation as constellation
+import gps_sim.coordinates as coordinates
 import gps_sim.dynamics as dynamics
 import gps_sim.ground_stations as ground_stations
 
@@ -90,12 +91,26 @@ station = ground_stations.create_station(
 ground_stations.update_station("Aberdeen", minimum_elevation_degrees=15.0)
 print(ground_stations.list_stations())
 ground_stations.remove_station("Aberdeen")
+
+eci = coordinates.orbital_to_eci(
+    radius_meters=26_560_000.0,
+    inclination_degrees=55.0,
+    longitude_of_ascending_node_degrees=30.0,
+    orbital_angle_degrees=120.0,
+)
+ecef = coordinates.eci_to_ecef(eci, earth_rotation_degrees=15.0)
+local = coordinates.ecef_to_local_horizon(ecef, station)
+print(local)
 ```
 
 `GroundStation` validates latitude, longitude, altitude, and elevation-mask
 inputs without starting the Tkinter application. Named stations can be created,
-updated, listed, and removed through the same headless module. Visibility
-calculations are tracked as a separate roadmap feature.
+updated, listed, and removed through the same headless module. The coordinate
+module converts circular-orbit positions through standard ECI and ECEF frames
+to station-centred east-north-up coordinates. Station conversion uses WGS84;
+the inertial-to-fixed conversion takes an explicit Earth-rotation angle so
+classroom scenarios remain deterministic. Visibility calculations are tracked
+as a separate roadmap feature.
 
 Click the documentation icon in the left sidebar for descriptions of the
 simulator, editor, file controls, and every public simulator function.
