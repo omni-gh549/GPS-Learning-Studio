@@ -25,7 +25,7 @@ Build the geometry needed to answer: "Which satellites can a receiver see?"
   and minimum elevation angle.
 - [x] Convert satellite and station positions between orbital, Earth-centred, and
   local horizon coordinate systems.
-- [ ] Calculate azimuth, elevation, range, and line-of-sight visibility.
+- [x] Calculate azimuth, elevation, range, and line-of-sight visibility.
 - [ ] Draw stations on Earth and highlight visible satellite links.
 - [ ] Let users select a station and inspect its live visibility table.
 - [ ] Replace the Ground stations placeholder with a guided lesson and coding

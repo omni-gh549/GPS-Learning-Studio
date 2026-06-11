@@ -73,6 +73,7 @@ import gps_sim.constellation as constellation
 import gps_sim.coordinates as coordinates
 import gps_sim.dynamics as dynamics
 import gps_sim.ground_stations as ground_stations
+import gps_sim.visibility as visibility
 
 print(constellation.get_satellite_states())
 print(constellation.get_satellite_count())
@@ -101,6 +102,9 @@ eci = coordinates.orbital_to_eci(
 ecef = coordinates.eci_to_ecef(eci, earth_rotation_degrees=15.0)
 local = coordinates.ecef_to_local_horizon(ecef, station)
 print(local)
+look = visibility.calculate_visibility(ecef, station)
+print(look.azimuth_degrees, look.elevation_degrees)
+print(look.range_meters, look.is_visible)
 ```
 
 `GroundStation` validates latitude, longitude, altitude, and elevation-mask
@@ -110,7 +114,8 @@ module converts circular-orbit positions through standard ECI and ECEF frames
 to station-centred east-north-up coordinates. Station conversion uses WGS84;
 the inertial-to-fixed conversion takes an explicit Earth-rotation angle so
 classroom scenarios remain deterministic. Visibility calculations are tracked
-as a separate roadmap feature.
+in a headless module that reports azimuth clockwise from north, elevation,
+slant range, and whether the station's minimum elevation mask is met.
 
 Click the documentation icon in the left sidebar for descriptions of the
 simulator, editor, file controls, and every public simulator function.

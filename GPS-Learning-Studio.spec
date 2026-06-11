@@ -7,9 +7,11 @@ a = Analysis(
     datas=[],
     hiddenimports=[
         "gps_sim.constellation",
+        "gps_sim.coordinates",
         "gps_sim.dynamics",
         "gps_sim.ground_stations",
         "gps_sim.runtime",
+        "gps_sim.visibility",
     ],
     hookspath=[],
     hooksconfig={},
