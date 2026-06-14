@@ -12,6 +12,7 @@ a = Analysis(
         "gps_sim.ground_stations",
         "gps_sim.runtime",
         "gps_sim.visibility",
+        "gps_sim.visualization",
     ],
     hookspath=[],
     hooksconfig={},

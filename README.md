@@ -2,7 +2,7 @@
 
 A dependency-free Python desktop application with:
 
-- An animated 3D wireframe Earth and starfield
+- An animated 3D wireframe Earth, ground stations, and visible satellite links
 - Four orbiting Globalstar satellites with hover IDs and realistic 113-116 minute periods
 - A syntax-highlighted Python editor
 - Named simulator modules with explicit imports
@@ -59,6 +59,8 @@ Visualizer controls:
 
 - Hold the left mouse button and drag to rotate the camera
 - Hover a satellite dot to show its Globalstar ID
+- Orange markers show named ground stations
+- Green dashed links show satellites above each station's elevation mask
 
 The Earth and satellites animate at real-time orbital rates. Use
 `dynamics.set_orbital_time_scale(...)` in the editor when a faster classroom
@@ -116,6 +118,9 @@ the inertial-to-fixed conversion takes an explicit Earth-rotation angle so
 classroom scenarios remain deterministic. Visibility calculations are tracked
 in a headless module that reports azimuth clockwise from north, elevation,
 slant range, and whether the station's minimum elevation mask is met.
+The visualizer starts with an Aberdeen station using a 5-degree elevation mask
+and automatically redraws markers and links when stations are created, updated,
+or removed in the editor.
 
 Click the documentation icon in the left sidebar for descriptions of the
 simulator, editor, file controls, and every public simulator function.

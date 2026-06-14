@@ -16,8 +16,18 @@ from pathlib import Path
 import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog
 
+from gps_sim.coordinates import (
+    CartesianPosition,
+    WGS84_SEMI_MAJOR_AXIS_METERS,
+    orbital_to_eci,
+)
+from gps_sim.ground_stations import create_station, list_stations
 from gps_sim.runtime import bind_visualizer
 from gps_sim.updater import CURRENT_VERSION, download_and_install, find_update, is_packaged
+from gps_sim.visualization import (
+    SatelliteSceneState,
+    build_ground_station_scenes,
+)
 
 
 BG = "#242628"
@@ -29,6 +39,9 @@ ACCENT = "#9bb7cc"
 EARTH = "#6f91a8"
 ORBIT = "#555f67"
 SATELLITE_COLORS = ("#d7a86e", "#7db6a6", "#b58dc7", "#d6cc75")
+STATION = "#ef8f72"
+VISIBLE_LINK = "#86d5b4"
+SATELLITE_ORBIT_RADIUS_METERS = WGS84_SEMI_MAJOR_AXIS_METERS * 1.58
 
 SIMULATOR_COMPLETIONS = (
     ("import gps_sim.constellation as constellation", "import gps_sim.constellation as constellation", "#8eb6d8"),
@@ -77,7 +90,7 @@ DOCUMENTATION_PAGES = (
         "START HERE",
         "Learn Python by changing a live orbital simulation and reading its telemetry.",
         (
-            ("Your workspace", "The left pane is a rotatable model of Earth and the active satellite constellation. The right pane is a Python editor with output below it."),
+            ("Your workspace", "The left pane is a rotatable model of Earth, named ground stations, and the active satellite constellation. The right pane is a Python editor with output below it."),
             ("First run", "Press F5 or choose Run. The starter script imports the constellation module, reads every satellite state, and prints the result."),
             ("A good next experiment", "Change the script so it prints only each satellite ID and orbital angle. Run it several times and watch the angles advance."),
         ),
@@ -165,6 +178,7 @@ DOCUMENTATION_PAGES = (
         (
             ("Camera", "Hold the left mouse button and drag to rotate the view around Earth."),
             ("Satellites", "Hover a satellite marker to display its Globalstar ID. Each colored marker follows its own inclined orbital plane."),
+            ("Ground stations", "Orange markers show named stations. Green dashed links connect each front-facing station to satellites at or above its minimum elevation angle."),
             ("Time", "The four satellites use 113-116 minute orbital periods. Increase the orbital time scale to make changes easier to observe during a lesson."),
         ),
     ),
@@ -507,7 +521,7 @@ class EarthVisualizer(tk.Canvas):
         self.start_time = time.perf_counter()
         self.earth_rotation = 0.0
         self.camera_yaw = 0.0
-        self.camera_pitch = math.radians(-18)
+        self.camera_pitch = math.radians(18)
         self.drag_origin: tuple[int, int] | None = None
         self.orbit_speed = 1.0
         self.earth_speed = 1.0
@@ -540,7 +554,7 @@ class EarthVisualizer(tk.Canvas):
         self.start_time = time.perf_counter()
         self.earth_rotation = 0.0
         self.camera_yaw = 0.0
-        self.camera_pitch = math.radians(-18)
+        self.camera_pitch = math.radians(18)
         self.orbit_speed = 1.0
         self.earth_speed = 1.0
 
@@ -614,9 +628,46 @@ class EarthVisualizer(tk.Canvas):
             )
 
     def _orbit_point(self, sat: Satellite, angle: float) -> tuple[float, float, float]:
-        point = (math.cos(angle) * 1.58, 0.0, math.sin(angle) * 1.58)
-        point = self._rotate_x(point, sat.inclination)
-        return self._rotate_y(point, sat.node)
+        position = orbital_to_eci(
+            SATELLITE_ORBIT_RADIUS_METERS,
+            math.degrees(sat.inclination),
+            math.degrees(sat.node),
+            math.degrees(angle),
+        )
+        return self._display_position(position, 1.58)
+
+    @staticmethod
+    def _display_position(
+        position: CartesianPosition,
+        scale: float,
+    ) -> tuple[float, float, float]:
+        magnitude = math.sqrt(
+            position.x_meters ** 2
+            + position.y_meters ** 2
+            + position.z_meters ** 2
+        )
+        return (
+            position.x_meters / magnitude * scale,
+            position.z_meters / magnitude * scale,
+            position.y_meters / magnitude * scale,
+        )
+
+    def _satellite_scene_states(
+        self,
+        elapsed: float,
+    ) -> tuple[SatelliteSceneState, ...]:
+        return tuple(
+            SatelliteSceneState(
+                satellite_id=sat.sat_id,
+                radius_meters=SATELLITE_ORBIT_RADIUS_METERS,
+                inclination_degrees=math.degrees(sat.inclination),
+                longitude_of_ascending_node_degrees=math.degrees(sat.node),
+                orbital_angle_degrees=math.degrees(
+                    sat.phase + elapsed * sat.speed * self.orbit_speed
+                ),
+            )
+            for sat in self.satellites
+        )
 
     def _draw_scene(self) -> None:
         self.delete("all")
@@ -650,12 +701,45 @@ class EarthVisualizer(tk.Canvas):
         elapsed = time.perf_counter() - self.start_time
         self.projected_satellites = []
         draw_order: list[tuple[float, float, float, Satellite]] = []
+        projected_satellites_by_id: dict[int, tuple[float, float, float]] = {}
         for sat in self.satellites:
             orbit = [self._orbit_point(sat, index * math.pi / 64) for index in range(129)]
             self._draw_curve(orbit, radius, ORBIT, 1.0, (3, 5))
             angle = sat.phase + elapsed * sat.speed * self.orbit_speed
             sx, sy, sz = self._project(self._orbit_point(sat, angle), radius)
             draw_order.append((sz, sx, sy, sat))
+            projected_satellites_by_id[sat.sat_id] = (sx, sy, sz)
+
+        earth_rotation_degrees = math.degrees(self.earth_rotation)
+        station_scenes = build_ground_station_scenes(
+            self._satellite_scene_states(elapsed),
+            list_stations(),
+            earth_rotation_degrees,
+        )
+        projected_stations = []
+        for station_scene in station_scenes:
+            station_point = self._display_position(station_scene.station_ecef, 1.0)
+            station_x, station_y, station_depth = self._project(station_point, radius)
+            projected_stations.append(
+                (station_depth, station_x, station_y, station_scene)
+            )
+            if station_depth < 0.0:
+                continue
+            for link in station_scene.satellite_links:
+                if not link.visibility.is_visible:
+                    continue
+                satellite_x, satellite_y, _ = projected_satellites_by_id[
+                    link.satellite_id
+                ]
+                self.create_line(
+                    station_x,
+                    station_y,
+                    satellite_x,
+                    satellite_y,
+                    fill=VISIBLE_LINK,
+                    width=1.8,
+                    dash=(4, 3),
+                )
 
         for depth, sx, sy, sat in sorted(draw_order):
             dot_radius = 5.5 if sat.sat_id == self.hovered_id else 4.0
@@ -678,9 +762,33 @@ class EarthVisualizer(tk.Canvas):
                     )
                     self.tag_lower(background, text_id)
 
+        for depth, station_x, station_y, station_scene in sorted(
+            projected_stations,
+            key=lambda projected_station: projected_station[0],
+        ):
+            if depth < 0.0:
+                continue
+            self.create_oval(
+                station_x - 4.5,
+                station_y - 4.5,
+                station_x + 4.5,
+                station_y + 4.5,
+                fill=STATION,
+                outline="#fff1eb",
+                width=1,
+            )
+            self.create_text(
+                station_x + 8,
+                station_y - 8,
+                text=station_scene.name,
+                fill=TEXT,
+                font=("Segoe UI", 8, "bold"),
+                anchor="sw",
+            )
+
         self.create_text(18, 18, text="ORBITAL VIEW", anchor="nw", fill=MUTED,
                          font=("Segoe UI", 9, "bold"))
-        self.create_text(18, height - 18, text="DRAG TO ROTATE  |  HOVER SATELLITES FOR ID", anchor="sw",
+        self.create_text(18, height - 18, text="STATIONS + VISIBLE LINKS  |  DRAG TO ROTATE", anchor="sw",
                          fill="#686d72", font=("Segoe UI", 8))
 
     def _animate(self) -> None:
@@ -930,6 +1038,14 @@ class OrbitStudio(tk.Tk):
         self.execution_namespace: dict[str, object] = {"__name__": "__main__"}
         self.output_queue: queue.Queue[str] = queue.Queue()
         self._match_windows_titlebar()
+        if not list_stations():
+            create_station(
+                "Aberdeen",
+                latitude_degrees=57.1497,
+                longitude_degrees=-2.0943,
+                altitude_meters=65.0,
+                minimum_elevation_degrees=5.0,
+            )
         self._build_ui()
         bind_visualizer(self.visualizer)
         self.after_idle(self._set_initial_split_positions)
