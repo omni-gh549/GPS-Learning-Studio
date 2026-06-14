@@ -25,8 +25,10 @@ from gps_sim.ground_stations import create_station, list_stations
 from gps_sim.runtime import bind_visualizer
 from gps_sim.updater import CURRENT_VERSION, download_and_install, find_update, is_packaged
 from gps_sim.visualization import (
+    GroundStationScene,
     SatelliteSceneState,
     build_ground_station_scenes,
+    build_station_visibility_rows,
 )
 
 
@@ -178,7 +180,7 @@ DOCUMENTATION_PAGES = (
         (
             ("Camera", "Hold the left mouse button and drag to rotate the view around Earth."),
             ("Satellites", "Hover a satellite marker to display its Globalstar ID. Each colored marker follows its own inclined orbital plane."),
-            ("Ground stations", "Orange markers show named stations. Green dashed links connect each front-facing station to satellites at or above its minimum elevation angle."),
+            ("Ground stations", "Orange markers show named stations. Click a front-facing marker to select it and inspect the live azimuth, elevation, range, and visibility table. Green dashed links connect stations to satellites at or above the elevation mask."),
             ("Time", "The four satellites use 113-116 minute orbital periods. Increase the orbital time scale to make changes easier to observe during a lesson."),
         ),
     ),
@@ -528,7 +530,10 @@ class EarthVisualizer(tk.Canvas):
         self.last_frame_time = time.perf_counter()
         self.running = True
         self.projected_satellites: list[tuple[float, float, Satellite]] = []
+        self.projected_stations: list[tuple[float, float, str]] = []
         self.hovered_id: int | None = None
+        self.selected_station_name: str | None = None
+        self.camera_dragged = False
         self.stars: list[tuple[float, float, float]] = []
         self.satellites = [
             Satellite(1, math.radians(52), math.radians(12), 0.0, math.tau / (114 * 60), SATELLITE_COLORS[0]),
@@ -716,6 +721,20 @@ class EarthVisualizer(tk.Canvas):
             list_stations(),
             earth_rotation_degrees,
         )
+        station_names = {scene.name for scene in station_scenes}
+        if self.selected_station_name not in station_names:
+            self.selected_station_name = (
+                station_scenes[0].name if station_scenes else None
+            )
+        selected_station_scene = next(
+            (
+                scene
+                for scene in station_scenes
+                if scene.name == self.selected_station_name
+            ),
+            None,
+        )
+        self.projected_stations = []
         projected_stations = []
         for station_scene in station_scenes:
             station_point = self._display_position(station_scene.station_ecef, 1.0)
@@ -768,6 +787,16 @@ class EarthVisualizer(tk.Canvas):
         ):
             if depth < 0.0:
                 continue
+            selected = station_scene.name == self.selected_station_name
+            if selected:
+                self.create_oval(
+                    station_x - 8.0,
+                    station_y - 8.0,
+                    station_x + 8.0,
+                    station_y + 8.0,
+                    outline=ACCENT,
+                    width=2,
+                )
             self.create_oval(
                 station_x - 4.5,
                 station_y - 4.5,
@@ -785,11 +814,128 @@ class EarthVisualizer(tk.Canvas):
                 font=("Segoe UI", 8, "bold"),
                 anchor="sw",
             )
+            self.projected_stations.append(
+                (station_x, station_y, station_scene.name)
+            )
+
+        if selected_station_scene is not None:
+            self._draw_visibility_table(selected_station_scene)
 
         self.create_text(18, 18, text="ORBITAL VIEW", anchor="nw", fill=MUTED,
                          font=("Segoe UI", 9, "bold"))
-        self.create_text(18, height - 18, text="STATIONS + VISIBLE LINKS  |  DRAG TO ROTATE", anchor="sw",
+        self.create_text(18, height - 18, text="CLICK STATION FOR LIVE TABLE  |  DRAG TO ROTATE", anchor="sw",
                          fill="#686d72", font=("Segoe UI", 8))
+
+    def _draw_visibility_table(
+        self,
+        station_scene: GroundStationScene,
+    ) -> None:
+        rows = build_station_visibility_rows(station_scene)
+        width = self.winfo_width()
+        panel_width = min(360, max(264, width - 36))
+        x1 = width - panel_width - 18
+        y1 = 42
+        row_height = 22
+        panel_height = 66 + len(rows) * row_height
+        background = rounded_rectangle(
+            self,
+            x1,
+            y1,
+            x1 + panel_width,
+            y1 + panel_height,
+            9,
+            fill="#25292c",
+            outline=BORDER,
+            width=1,
+        )
+        self.tag_raise(background)
+        self.create_text(
+            x1 + 12,
+            y1 + 12,
+            text=f"{station_scene.name.upper()} VISIBILITY",
+            fill=TEXT,
+            font=("Segoe UI", 9, "bold"),
+            anchor="nw",
+        )
+        self.create_text(
+            x1 + panel_width - 12,
+            y1 + 12,
+            text=f"MASK {station_scene.station.minimum_elevation_degrees:.1f}°",
+            fill=MUTED,
+            font=("Segoe UI", 8),
+            anchor="ne",
+        )
+        columns = (
+            ("SAT", 12, "w"),
+            ("AZ", 0.30, "e"),
+            ("EL", 0.48, "e"),
+            ("RANGE", 0.72, "e"),
+            ("STATUS", -12, "e"),
+        )
+        header_y = y1 + 42
+        for label, offset, anchor in columns:
+            column_x = (
+                x1 + offset
+                if isinstance(offset, int)
+                else x1 + panel_width * offset
+            )
+            if offset == -12:
+                column_x = x1 + panel_width - 12
+            self.create_text(
+                column_x,
+                header_y,
+                text=label,
+                fill=MUTED,
+                font=("Segoe UI", 7, "bold"),
+                anchor=anchor,
+            )
+        self.create_line(
+            x1 + 12,
+            y1 + 54,
+            x1 + panel_width - 12,
+            y1 + 54,
+            fill=BORDER,
+        )
+        for index, row in enumerate(rows):
+            row_y = y1 + 66 + index * row_height
+            status = "VISIBLE" if row.is_visible else "BELOW"
+            status_color = VISIBLE_LINK if row.is_visible else MUTED
+            values = (
+                (f"G{row.satellite_id}", x1 + 12, "w", TEXT),
+                (
+                    f"{row.azimuth_degrees:5.1f}°",
+                    x1 + panel_width * 0.30,
+                    "e",
+                    TEXT,
+                ),
+                (
+                    f"{row.elevation_degrees:5.1f}°",
+                    x1 + panel_width * 0.48,
+                    "e",
+                    TEXT,
+                ),
+                (
+                    f"{row.range_meters / 1000.0:,.0f} km",
+                    x1 + panel_width * 0.72,
+                    "e",
+                    TEXT,
+                ),
+                (
+                    status,
+                    x1 + panel_width - 12,
+                    "e",
+                    status_color,
+                ),
+            )
+            for value, column_x, anchor, color in values:
+                self.create_text(
+                    column_x,
+                    row_y,
+                    text=value,
+                    fill=color,
+                    font=("Cascadia Mono", 8),
+                    anchor=anchor,
+                )
 
     def _animate(self) -> None:
         now = time.perf_counter()
@@ -812,6 +958,7 @@ class EarthVisualizer(tk.Canvas):
 
     def _start_camera_drag(self, event: tk.Event) -> None:
         self.drag_origin = (event.x, event.y)
+        self.camera_dragged = False
         self.hovered_id = None
         self.configure(cursor="fleur")
 
@@ -819,13 +966,26 @@ class EarthVisualizer(tk.Canvas):
         if self.drag_origin is None:
             return
         previous_x, previous_y = self.drag_origin
+        if math.hypot(event.x - previous_x, event.y - previous_y) > 2:
+            self.camera_dragged = True
         self.camera_yaw += (event.x - previous_x) * 0.009
         self.camera_pitch += (event.y - previous_y) * 0.009
         self.camera_pitch = max(math.radians(-85), min(math.radians(85), self.camera_pitch))
         self.drag_origin = (event.x, event.y)
 
-    def _stop_camera_drag(self, _event: tk.Event) -> None:
+    def _stop_camera_drag(self, event: tk.Event) -> None:
+        if not self.camera_dragged:
+            nearest: tuple[float, str] | None = None
+            for x, y, station_name in self.projected_stations:
+                distance = math.hypot(event.x - x, event.y - y)
+                if distance <= 14 and (
+                    nearest is None or distance < nearest[0]
+                ):
+                    nearest = (distance, station_name)
+            if nearest is not None:
+                self.selected_station_name = nearest[1]
         self.drag_origin = None
+        self.camera_dragged = False
         self.configure(cursor="crosshair")
 
     def _clear_hover(self) -> None:

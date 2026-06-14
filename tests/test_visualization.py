@@ -6,6 +6,7 @@ from gps_sim.ground_stations import GroundStation
 from gps_sim.visualization import (
     SatelliteSceneState,
     build_ground_station_scenes,
+    build_station_visibility_rows,
 )
 
 
@@ -69,6 +70,27 @@ class VisualizationTests(unittest.TestCase):
             [link.satellite_id for link in scenes[0].satellite_links],
             [2, 1],
         )
+
+    def test_builds_visibility_table_rows_for_selected_station(self) -> None:
+        station = GroundStation(0.0, 0.0, minimum_elevation_degrees=10.0)
+        satellites = (
+            SatelliteSceneState(7, 26_560_000.0, 0.0, 0.0, 0.0),
+            SatelliteSceneState(8, 26_560_000.0, 0.0, 180.0, 0.0),
+        )
+        scene = build_ground_station_scenes(
+            satellites,
+            {"Equator": station},
+            earth_rotation_degrees=0.0,
+        )[0]
+
+        rows = build_station_visibility_rows(scene)
+
+        self.assertEqual([row.satellite_id for row in rows], [7, 8])
+        self.assertAlmostEqual(rows[0].azimuth_degrees, 0.0)
+        self.assertAlmostEqual(rows[0].elevation_degrees, 90.0)
+        self.assertGreater(rows[0].range_meters, 20_000_000.0)
+        self.assertTrue(rows[0].is_visible)
+        self.assertFalse(rows[1].is_visible)
 
 
 if __name__ == "__main__":

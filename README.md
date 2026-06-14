@@ -60,6 +60,7 @@ Visualizer controls:
 - Hold the left mouse button and drag to rotate the camera
 - Hover a satellite dot to show its Globalstar ID
 - Orange markers show named ground stations
+- Click a ground station to inspect its live azimuth, elevation, range, and visibility table
 - Green dashed links show satellites above each station's elevation mask
 
 The Earth and satellites animate at real-time orbital rates. Use
@@ -120,7 +121,9 @@ in a headless module that reports azimuth clockwise from north, elevation,
 slant range, and whether the station's minimum elevation mask is met.
 The visualizer starts with an Aberdeen station using a 5-degree elevation mask
 and automatically redraws markers and links when stations are created, updated,
-or removed in the editor.
+or removed in the editor. Click any front-facing station marker to select it;
+the live table reports every satellite's look angles, range, and elevation-mask
+status using the same visibility results that drive the green links.
 
 Click the documentation icon in the left sidebar for descriptions of the
 simulator, editor, file controls, and every public simulator function.

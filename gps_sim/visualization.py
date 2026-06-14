@@ -46,6 +46,33 @@ class GroundStationScene:
     satellite_links: tuple[SatelliteLink, ...]
 
 
+@dataclass(frozen=True)
+class StationVisibilityRow:
+    """One satellite row for a selected station's live visibility table."""
+
+    satellite_id: int
+    azimuth_degrees: float
+    elevation_degrees: float
+    range_meters: float
+    is_visible: bool
+
+
+def build_station_visibility_rows(
+    scene: GroundStationScene,
+) -> tuple[StationVisibilityRow, ...]:
+    """Build table-ready visibility rows in constellation order."""
+    return tuple(
+        StationVisibilityRow(
+            satellite_id=link.satellite_id,
+            azimuth_degrees=link.visibility.azimuth_degrees,
+            elevation_degrees=link.visibility.elevation_degrees,
+            range_meters=link.visibility.range_meters,
+            is_visible=link.visibility.is_visible,
+        )
+        for link in scene.satellite_links
+    )
+
+
 def build_ground_station_scenes(
     satellites: Iterable[SatelliteSceneState],
     stations: Mapping[str, GroundStation],
@@ -94,5 +121,7 @@ __all__ = [
     "GroundStationScene",
     "SatelliteLink",
     "SatelliteSceneState",
+    "StationVisibilityRow",
     "build_ground_station_scenes",
+    "build_station_visibility_rows",
 ]
