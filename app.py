@@ -196,10 +196,62 @@ DOCUMENTATION_PAGES = (
     ),
     DocumentationPage(
         "Ground stations",
-        "COMING SOON",
-        "Model station coordinates, elevation masks, and satellite visibility windows.",
-        (("Planned page", "This lesson will introduce latitude and longitude, line of sight, elevation angle, and simple pass prediction."),),
-        placeholder=True,
+        "15 MINUTE LESSON",
+        "Use station coordinates and an elevation mask to decide which satellites are visible.",
+        (
+            (
+                "Learning objectives",
+                "Explain how latitude and longitude place a receiver on Earth, interpret azimuth and elevation, and use an elevation mask to identify a simple satellite pass.",
+            ),
+            (
+                "1. Place a receiver",
+                "Latitude measures north or south of the equator. Longitude measures east or west of Greenwich. Altitude raises the receiver above the WGS84 reference ellipsoid.\n\n"
+                "import gps_sim.ground_stations as ground_stations\n\n"
+                "station = ground_stations.GroundStation(\n"
+                "    latitude_degrees=57.1497,\n"
+                "    longitude_degrees=-2.0943,\n"
+                "    altitude_meters=65.0,\n"
+                "    minimum_elevation_degrees=10.0,\n"
+                ")",
+            ),
+            (
+                "2. Read the sky",
+                "Azimuth points clockwise from north. Elevation measures upward from the local horizon: 0 degrees is on the horizon and 90 degrees is directly overhead. Range is the straight-line distance to the satellite.",
+            ),
+            (
+                "3. Apply the elevation mask",
+                "Buildings, terrain, and atmospheric effects make low satellites less useful. This lesson uses a 10-degree mask, so a satellite is visible when its elevation is at least 10 degrees. A pass begins when elevation crosses above the mask and ends when it drops below it.",
+            ),
+            (
+                "Guided lab",
+                "Run this snapshot several times and compare the visible IDs as the orbital angles advance. The fixed Earth rotation angle keeps the coordinate-frame assumption explicit for this exercise.\n\n"
+                "import gps_sim.constellation as constellation\n"
+                "import gps_sim.coordinates as coordinates\n"
+                "import gps_sim.visibility as visibility\n\n"
+                "for satellite in constellation.get_satellite_states():\n"
+                "    eci = coordinates.orbital_to_eci(\n"
+                "        26_560_000.0,\n"
+                "        satellite[\"inclination_degrees\"],\n"
+                "        satellite[\"longitude_of_ascending_node_degrees\"],\n"
+                "        satellite[\"orbital_angle_degrees\"],\n"
+                "    )\n"
+                "    ecef = coordinates.eci_to_ecef(eci, earth_rotation_degrees=0.0)\n"
+                "    look = visibility.calculate_visibility(ecef, station)\n"
+                "    print(satellite[\"id\"], round(look.elevation_degrees, 1), look.is_visible)",
+            ),
+            (
+                "Coding challenge",
+                "Create a station at latitude 0 degrees and longitude 0 degrees with a 20-degree elevation mask. Calculate every satellite's visibility, then print only the IDs of satellites above the mask.",
+            ),
+            (
+                "Success check",
+                "Your code should use GroundStation, orbital_to_eci, eci_to_ecef, and calculate_visibility. The printed list may change as the simulation advances, but every printed satellite must have is_visible equal to True.",
+            ),
+            (
+                "Stretch goal",
+                "Print each visible satellite's azimuth, elevation, and range in kilometres. Run the script repeatedly and note when a satellite rises above or sets below the 20-degree mask.",
+            ),
+        ),
     ),
     DocumentationPage(
         "Position fixes",

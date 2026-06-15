@@ -28,7 +28,7 @@ Build the geometry needed to answer: "Which satellites can a receiver see?"
 - [x] Calculate azimuth, elevation, range, and line-of-sight visibility.
 - [x] Draw stations on Earth and highlight visible satellite links.
 - [x] Let users select a station and inspect its live visibility table.
-- [ ] Replace the Ground stations placeholder with a guided lesson and coding
+- [x] Replace the Ground stations placeholder with a guided lesson and coding
   challenge.
 
 ### Acceptance criteria

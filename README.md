@@ -7,7 +7,7 @@ A dependency-free Python desktop application with:
 - A syntax-highlighted Python editor
 - Named simulator modules with explicit imports
 - Function suggestions and autocomplete
-- Multi-page in-app documentation with lessons, API references, and placeholders
+- Multi-page in-app documentation with lessons, API references, and coding challenges
 - Open, save, and run controls
 
 See [ROADMAP.md](ROADMAP.md) for the prioritized feature plan.
@@ -126,4 +126,7 @@ the live table reports every satellite's look angles, range, and elevation-mask
 status using the same visibility results that drive the green links.
 
 Click the documentation icon in the left sidebar for descriptions of the
-simulator, editor, file controls, and every public simulator function.
+simulator, editor, file controls, and every public simulator function. The
+Ground stations lesson is a guided 15-minute lab covering latitude/longitude,
+look angles, elevation masks, pass visibility, and an editor-ready coding
+challenge.
