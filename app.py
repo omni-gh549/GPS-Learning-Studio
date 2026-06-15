@@ -50,6 +50,7 @@ SIMULATOR_COMPLETIONS = (
     ("import gps_sim.coordinates as coordinates", "import gps_sim.coordinates as coordinates", "#8eb6d8"),
     ("import gps_sim.dynamics as dynamics", "import gps_sim.dynamics as dynamics", "#8eb6d8"),
     ("import gps_sim.ground_stations as ground_stations", "import gps_sim.ground_stations as ground_stations", "#8eb6d8"),
+    ("import gps_sim.measurements as measurements", "import gps_sim.measurements as measurements", "#8eb6d8"),
     ("import gps_sim.visibility as visibility", "import gps_sim.visibility as visibility", "#8eb6d8"),
     ("constellation.get_satellite_states()  -> list[dict]", "constellation.get_satellite_states()", "#7db6a6"),
     ("constellation.get_satellite_count()  -> int", "constellation.get_satellite_count()", "#7db6a6"),
@@ -64,6 +65,8 @@ SIMULATOR_COMPLETIONS = (
     ("coordinates.orbital_to_eci(...)", "coordinates.orbital_to_eci(26560000.0, 55.0, 0.0, 0.0)", "#7db6a6"),
     ("coordinates.eci_to_ecef(...)", "coordinates.eci_to_ecef(eci, 0.0)", "#7db6a6"),
     ("coordinates.ecef_to_local_horizon(...)", "coordinates.ecef_to_local_horizon(ecef, station)", "#7db6a6"),
+    ("measurements.geometric_range(...)", "measurements.geometric_range(receiver_ecef, satellite_ecef)", "#7db6a6"),
+    ("measurements.calculate_pseudorange(...)", "measurements.calculate_pseudorange(receiver_ecef, satellite_ecef)", "#7db6a6"),
     ("visibility.calculate_visibility(...)", "visibility.calculate_visibility(ecef, station)", "#7db6a6"),
     ("print(value)  e.g. print(\"Satellite state\")", "print()", "#c59bcf"),
     ("len(iterable)  e.g. len(states)", "len()", "#c59bcf"),
@@ -161,6 +164,16 @@ DOCUMENTATION_PAGES = (
             ("Import", "import gps_sim.visibility as visibility"),
             ("calculate_visibility(...)", "look = visibility.calculate_visibility(satellite_ecef, station)\nprint(look.azimuth_degrees)\nprint(look.elevation_degrees)\nprint(look.range_meters)\nprint(look.is_visible)\n\nAzimuth is measured clockwise from north. A satellite is visible when its elevation is greater than or equal to the station minimum elevation angle."),
             ("local_horizon_visibility(...)", "look = visibility.local_horizon_visibility(local, minimum_elevation_degrees=10.0)\n\nCalculates the same result directly from east, north, and up coordinates. Exact zenith uses an azimuth of 0 degrees by convention."),
+        ),
+    ),
+    DocumentationPage(
+        "Measurements API",
+        "API REFERENCE",
+        "Calculate geometric range and receiver-clock-biased pseudorange measurements.",
+        (
+            ("Import", "import gps_sim.measurements as measurements"),
+            ("geometric_range(...)", "range_m = measurements.geometric_range(receiver_ecef, satellite_ecef)\nprint(range_m)\n\nReturns the straight-line distance between receiver and satellite Earth-fixed positions in meters."),
+            ("calculate_pseudorange(...)", "reading = measurements.calculate_pseudorange(\n    receiver_ecef,\n    satellite_ecef,\n    receiver_clock_bias_seconds=0.000001,\n)\nprint(reading.geometric_range_meters)\nprint(reading.pseudorange_meters)\n\nPseudorange equals geometric range plus receiver clock bias multiplied by the signal speed. The default signal speed is the speed of light."),
         ),
     ),
     DocumentationPage(
@@ -544,6 +557,7 @@ class DocumentationPanel(tk.Frame):
                     or line.startswith("constellation.")
                     or line.startswith("dynamics.")
                     or line.startswith("ground_stations.")
+                    or line.startswith("measurements.")
                     or line.startswith("station =")
                     or line.startswith("states =")
                     or line.startswith("leader =")

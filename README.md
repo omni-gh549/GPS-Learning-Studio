@@ -76,6 +76,7 @@ import gps_sim.constellation as constellation
 import gps_sim.coordinates as coordinates
 import gps_sim.dynamics as dynamics
 import gps_sim.ground_stations as ground_stations
+import gps_sim.measurements as measurements
 import gps_sim.visibility as visibility
 
 print(constellation.get_satellite_states())
@@ -108,6 +109,13 @@ print(local)
 look = visibility.calculate_visibility(ecef, station)
 print(look.azimuth_degrees, look.elevation_degrees)
 print(look.range_meters, look.is_visible)
+station_ecef = coordinates.station_to_ecef(station)
+reading = measurements.calculate_pseudorange(
+    receiver_ecef=station_ecef,
+    satellite_ecef=ecef,
+    receiver_clock_bias_seconds=0.000001,
+)
+print(reading.geometric_range_meters, reading.pseudorange_meters)
 ```
 
 `GroundStation` validates latitude, longitude, altitude, and elevation-mask
@@ -119,6 +127,9 @@ the inertial-to-fixed conversion takes an explicit Earth-rotation angle so
 classroom scenarios remain deterministic. Visibility calculations are tracked
 in a headless module that reports azimuth clockwise from north, elevation,
 slant range, and whether the station's minimum elevation mask is met.
+The measurements module calculates straight-line geometric range and
+pseudorange, using an explicit receiver clock-bias term so timing-error
+examples remain deterministic.
 The visualizer starts with an Aberdeen station using a 5-degree elevation mask
 and automatically redraws markers and links when stations are created, updated,
 or removed in the editor. Click any front-facing station marker to select it;

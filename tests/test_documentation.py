@@ -40,6 +40,25 @@ class DocumentationTests(unittest.TestCase):
         self.assertIn("eci_to_ecef", lesson_text)
         self.assertIn("calculate_visibility", lesson_text)
 
+    def test_measurements_api_page_documents_range_and_pseudorange(self) -> None:
+        page = next(
+            page for page in DOCUMENTATION_PAGES if page.title == "Measurements API"
+        )
+        content = "\n".join(
+            (page.title, page.eyebrow, page.summary)
+            + tuple(
+                text
+                for section in page.sections
+                for text in section
+            )
+        )
+
+        self.assertFalse(page.placeholder)
+        self.assertIn("gps_sim.measurements", content)
+        self.assertIn("geometric_range", content)
+        self.assertIn("calculate_pseudorange", content)
+        self.assertIn("receiver clock bias", content.lower())
+
 
 if __name__ == "__main__":
     unittest.main()
