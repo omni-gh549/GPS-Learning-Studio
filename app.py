@@ -51,6 +51,7 @@ SIMULATOR_COMPLETIONS = (
     ("import gps_sim.dynamics as dynamics", "import gps_sim.dynamics as dynamics", "#8eb6d8"),
     ("import gps_sim.ground_stations as ground_stations", "import gps_sim.ground_stations as ground_stations", "#8eb6d8"),
     ("import gps_sim.measurements as measurements", "import gps_sim.measurements as measurements", "#8eb6d8"),
+    ("import gps_sim.positioning as positioning", "import gps_sim.positioning as positioning", "#8eb6d8"),
     ("import gps_sim.visibility as visibility", "import gps_sim.visibility as visibility", "#8eb6d8"),
     ("constellation.get_satellite_states()  -> list[dict]", "constellation.get_satellite_states()", "#7db6a6"),
     ("constellation.get_satellite_count()  -> int", "constellation.get_satellite_count()", "#7db6a6"),
@@ -68,6 +69,8 @@ SIMULATOR_COMPLETIONS = (
     ("measurements.ReceiverClockBias(...)", "measurements.ReceiverClockBias(seconds=0.000001)", "#7db6a6"),
     ("measurements.geometric_range(...)", "measurements.geometric_range(receiver_ecef, satellite_ecef)", "#7db6a6"),
     ("measurements.calculate_pseudorange(...)", "measurements.calculate_pseudorange(receiver_ecef, satellite_ecef)", "#7db6a6"),
+    ("positioning.PseudorangeObservation(...)", "positioning.PseudorangeObservation(satellite_ecef, pseudorange_meters)", "#7db6a6"),
+    ("positioning.solve_position(...)", "positioning.solve_position(observations)", "#7db6a6"),
     ("visibility.calculate_visibility(...)", "visibility.calculate_visibility(ecef, station)", "#7db6a6"),
     ("print(value)  e.g. print(\"Satellite state\")", "print()", "#c59bcf"),
     ("len(iterable)  e.g. len(states)", "len()", "#c59bcf"),
@@ -176,6 +179,16 @@ DOCUMENTATION_PAGES = (
             ("ReceiverClockBias(...)", "clock_bias = measurements.ReceiverClockBias(seconds=0.000001)\nprint(clock_bias.range_error_meters())\n\nA positive receiver clock bias makes the receiver clock run ahead of GPS time and adds distance to the pseudorange. Use ReceiverClockBias.from_range_error(...) when a lesson starts from the equivalent range error in meters."),
             ("geometric_range(...)", "range_m = measurements.geometric_range(receiver_ecef, satellite_ecef)\nprint(range_m)\n\nReturns the straight-line distance between receiver and satellite Earth-fixed positions in meters."),
             ("calculate_pseudorange(...)", "reading = measurements.calculate_pseudorange(\n    receiver_ecef,\n    satellite_ecef,\n    receiver_clock_bias=clock_bias,\n)\nprint(reading.geometric_range_meters)\nprint(reading.pseudorange_meters)\n\nPseudorange equals geometric range plus receiver clock bias multiplied by the signal speed. The default signal speed is the speed of light."),
+        ),
+    ),
+    DocumentationPage(
+        "Positioning API",
+        "API REFERENCE",
+        "Estimate receiver ECEF position and clock bias from four or more pseudoranges.",
+        (
+            ("Import", "import gps_sim.positioning as positioning"),
+            ("PseudorangeObservation(...)", "observation = positioning.PseudorangeObservation(\n    satellite_ecef=satellite_ecef,\n    pseudorange_meters=reading.pseudorange_meters,\n)\n\nEach observation pairs one satellite Earth-fixed position with the pseudorange measured by the receiver."),
+            ("solve_position(...)", "fix = positioning.solve_position(observations)\nprint(fix.receiver_ecef)\nprint(fix.receiver_clock_bias_seconds)\nprint(fix.residuals_meters)\n\nThe solver estimates x, y, z, and receiver clock bias together. A clear ValueError is raised when fewer than four satellites are supplied or the satellite geometry is singular."),
         ),
     ),
     DocumentationPage(
@@ -560,6 +573,7 @@ class DocumentationPanel(tk.Frame):
                     or line.startswith("dynamics.")
                     or line.startswith("ground_stations.")
                     or line.startswith("measurements.")
+                    or line.startswith("positioning.")
                     or line.startswith("station =")
                     or line.startswith("states =")
                     or line.startswith("leader =")

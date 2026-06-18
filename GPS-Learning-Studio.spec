@@ -11,6 +11,7 @@ a = Analysis(
         "gps_sim.dynamics",
         "gps_sim.ground_stations",
         "gps_sim.measurements",
+        "gps_sim.positioning",
         "gps_sim.runtime",
         "gps_sim.visibility",
         "gps_sim.visualization",

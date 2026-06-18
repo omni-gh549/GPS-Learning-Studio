@@ -77,6 +77,7 @@ import gps_sim.coordinates as coordinates
 import gps_sim.dynamics as dynamics
 import gps_sim.ground_stations as ground_stations
 import gps_sim.measurements as measurements
+import gps_sim.positioning as positioning
 import gps_sim.visibility as visibility
 
 print(constellation.get_satellite_states())
@@ -118,6 +119,18 @@ reading = measurements.calculate_pseudorange(
 )
 print(clock_bias.range_error_meters())
 print(reading.geometric_range_meters, reading.pseudorange_meters)
+observation = positioning.PseudorangeObservation(
+    satellite_ecef=ecef,
+    pseudorange_meters=reading.pseudorange_meters,
+)
+observations = [
+    observation,
+    # Add three or more observations from other satellite ECEF positions
+    # before solving.
+]
+if len(observations) >= 4:
+    fix = positioning.solve_position(observations)
+    print(fix.receiver_ecef, fix.receiver_clock_bias_seconds)
 ```
 
 `GroundStation` validates latitude, longitude, altitude, and elevation-mask
@@ -133,6 +146,10 @@ The measurements module calculates straight-line geometric range and
 pseudorange, using a configurable receiver clock bias so timing-error examples
 remain deterministic. Clock bias can be set directly in seconds or created from
 an equivalent range error in meters.
+The positioning module estimates receiver Earth-fixed x, y, z and receiver
+clock bias from four or more pseudorange observations. It uses a dependency-free
+iterative least-squares solver and raises clear diagnostics for insufficient or
+singular satellite geometry.
 The visualizer starts with an Aberdeen station using a 5-degree elevation mask
 and automatically redraws markers and links when stations are created, updated,
 or removed in the editor. Click any front-facing station marker to select it;

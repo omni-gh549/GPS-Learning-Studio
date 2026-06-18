@@ -60,6 +60,25 @@ class DocumentationTests(unittest.TestCase):
         self.assertIn("calculate_pseudorange", content)
         self.assertIn("receiver clock bias", content.lower())
 
+    def test_positioning_api_page_documents_solver(self) -> None:
+        page = next(
+            page for page in DOCUMENTATION_PAGES if page.title == "Positioning API"
+        )
+        content = "\n".join(
+            (page.title, page.eyebrow, page.summary)
+            + tuple(
+                text
+                for section in page.sections
+                for text in section
+            )
+        )
+
+        self.assertFalse(page.placeholder)
+        self.assertIn("gps_sim.positioning", content)
+        self.assertIn("PseudorangeObservation", content)
+        self.assertIn("solve_position", content)
+        self.assertIn("clock bias", content.lower())
+
 
 if __name__ == "__main__":
     unittest.main()
