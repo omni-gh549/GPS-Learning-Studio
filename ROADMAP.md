@@ -48,7 +48,7 @@ receiver calculate its position?"
 ### Features
 
 - [x] Add a `gps_sim.measurements` module for geometric range and pseudorange.
-- [ ] Add a configurable receiver clock bias.
+- [x] Add a configurable receiver clock bias.
 - [ ] Add a `gps_sim.positioning` module with an iterative four-unknown solver for
   receiver position and clock bias.
 - [ ] Display the true receiver position, estimated position, residuals, and error.

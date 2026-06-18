@@ -7,6 +7,7 @@ from gps_sim.coordinates import CartesianPosition
 from gps_sim.measurements import (
     SPEED_OF_LIGHT_METERS_PER_SECOND,
     RangeMeasurement,
+    ReceiverClockBias,
     calculate_pseudorange,
     geometric_range,
 )
@@ -61,10 +62,44 @@ class MeasurementTests(unittest.TestCase):
 
         self.assertEqual(result.pseudorange_meters, 800.0)
 
+    def test_receiver_clock_bias_object_configures_pseudorange(self) -> None:
+        receiver = CartesianPosition(0.0, 0.0, 0.0)
+        satellite = CartesianPosition(1_000.0, 0.0, 0.0)
+        clock_bias = ReceiverClockBias(seconds=0.25)
+
+        result = calculate_pseudorange(
+            receiver,
+            satellite,
+            signal_speed_meters_per_second=400.0,
+            receiver_clock_bias=clock_bias,
+        )
+
+        self.assertEqual(clock_bias.range_error_meters(400.0), 100.0)
+        self.assertEqual(result.receiver_clock_bias_seconds, 0.25)
+        self.assertEqual(result.pseudorange_meters, 1_100.0)
+
+    def test_receiver_clock_bias_can_be_configured_from_range_error(self) -> None:
+        clock_bias = ReceiverClockBias.from_range_error(
+            range_error_meters=-50.0,
+            signal_speed_meters_per_second=200.0,
+        )
+
+        self.assertEqual(clock_bias.seconds, -0.25)
+        self.assertEqual(clock_bias.range_error_meters(200.0), -50.0)
+
     def test_rejects_invalid_measurement_inputs(self) -> None:
         receiver = CartesianPosition(0.0, 0.0, 0.0)
         satellite = CartesianPosition(1.0, 0.0, 0.0)
 
+        with self.assertRaisesRegex(ValueError, "seconds"):
+            ReceiverClockBias(math.nan)
+        with self.assertRaisesRegex(ValueError, "range_error_meters"):
+            ReceiverClockBias.from_range_error(math.nan)
+        with self.assertRaisesRegex(ValueError, "signal_speed"):
+            ReceiverClockBias.from_range_error(
+                1.0,
+                signal_speed_meters_per_second=0.0,
+            )
         with self.assertRaisesRegex(ValueError, "receiver_clock_bias_seconds"):
             calculate_pseudorange(receiver, satellite, math.nan)
         with self.assertRaisesRegex(ValueError, "signal_speed"):
@@ -72,6 +107,13 @@ class MeasurementTests(unittest.TestCase):
                 receiver,
                 satellite,
                 signal_speed_meters_per_second=0.0,
+            )
+        with self.assertRaisesRegex(ValueError, "cannot both be set"):
+            calculate_pseudorange(
+                receiver,
+                satellite,
+                receiver_clock_bias_seconds=1.0,
+                receiver_clock_bias=ReceiverClockBias(1.0),
             )
         with self.assertRaisesRegex(ValueError, "geometric_range"):
             RangeMeasurement(-1.0, 0.0, 0.0)

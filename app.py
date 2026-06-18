@@ -65,6 +65,7 @@ SIMULATOR_COMPLETIONS = (
     ("coordinates.orbital_to_eci(...)", "coordinates.orbital_to_eci(26560000.0, 55.0, 0.0, 0.0)", "#7db6a6"),
     ("coordinates.eci_to_ecef(...)", "coordinates.eci_to_ecef(eci, 0.0)", "#7db6a6"),
     ("coordinates.ecef_to_local_horizon(...)", "coordinates.ecef_to_local_horizon(ecef, station)", "#7db6a6"),
+    ("measurements.ReceiverClockBias(...)", "measurements.ReceiverClockBias(seconds=0.000001)", "#7db6a6"),
     ("measurements.geometric_range(...)", "measurements.geometric_range(receiver_ecef, satellite_ecef)", "#7db6a6"),
     ("measurements.calculate_pseudorange(...)", "measurements.calculate_pseudorange(receiver_ecef, satellite_ecef)", "#7db6a6"),
     ("visibility.calculate_visibility(...)", "visibility.calculate_visibility(ecef, station)", "#7db6a6"),
@@ -172,8 +173,9 @@ DOCUMENTATION_PAGES = (
         "Calculate geometric range and receiver-clock-biased pseudorange measurements.",
         (
             ("Import", "import gps_sim.measurements as measurements"),
+            ("ReceiverClockBias(...)", "clock_bias = measurements.ReceiverClockBias(seconds=0.000001)\nprint(clock_bias.range_error_meters())\n\nA positive receiver clock bias makes the receiver clock run ahead of GPS time and adds distance to the pseudorange. Use ReceiverClockBias.from_range_error(...) when a lesson starts from the equivalent range error in meters."),
             ("geometric_range(...)", "range_m = measurements.geometric_range(receiver_ecef, satellite_ecef)\nprint(range_m)\n\nReturns the straight-line distance between receiver and satellite Earth-fixed positions in meters."),
-            ("calculate_pseudorange(...)", "reading = measurements.calculate_pseudorange(\n    receiver_ecef,\n    satellite_ecef,\n    receiver_clock_bias_seconds=0.000001,\n)\nprint(reading.geometric_range_meters)\nprint(reading.pseudorange_meters)\n\nPseudorange equals geometric range plus receiver clock bias multiplied by the signal speed. The default signal speed is the speed of light."),
+            ("calculate_pseudorange(...)", "reading = measurements.calculate_pseudorange(\n    receiver_ecef,\n    satellite_ecef,\n    receiver_clock_bias=clock_bias,\n)\nprint(reading.geometric_range_meters)\nprint(reading.pseudorange_meters)\n\nPseudorange equals geometric range plus receiver clock bias multiplied by the signal speed. The default signal speed is the speed of light."),
         ),
     ),
     DocumentationPage(

@@ -55,6 +55,7 @@ class DocumentationTests(unittest.TestCase):
 
         self.assertFalse(page.placeholder)
         self.assertIn("gps_sim.measurements", content)
+        self.assertIn("ReceiverClockBias", content)
         self.assertIn("geometric_range", content)
         self.assertIn("calculate_pseudorange", content)
         self.assertIn("receiver clock bias", content.lower())
