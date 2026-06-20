@@ -51,7 +51,7 @@ receiver calculate its position?"
 - [x] Add a configurable receiver clock bias.
 - [x] Add a `gps_sim.positioning` module with an iterative four-unknown solver for
   receiver position and clock bias.
-- [ ] Display the true receiver position, estimated position, residuals, and error.
+- [x] Display the true receiver position, estimated position, residuals, and error.
 - [ ] Visualize range spheres or simplified measurement links.
 - [ ] Explain why four satellites are normally required for a 3D fix.
 - [ ] Replace the Position fixes placeholder with a worked trilateration lesson and

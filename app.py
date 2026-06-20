@@ -26,7 +26,9 @@ from gps_sim.runtime import bind_visualizer
 from gps_sim.updater import CURRENT_VERSION, download_and_install, find_update, is_packaged
 from gps_sim.visualization import (
     GroundStationScene,
+    ReceiverPositionFixDisplay,
     SatelliteSceneState,
+    build_receiver_position_fix_display,
     build_ground_station_scenes,
     build_station_visibility_rows,
 )
@@ -188,7 +190,7 @@ DOCUMENTATION_PAGES = (
         (
             ("Import", "import gps_sim.positioning as positioning"),
             ("PseudorangeObservation(...)", "observation = positioning.PseudorangeObservation(\n    satellite_ecef=satellite_ecef,\n    pseudorange_meters=reading.pseudorange_meters,\n)\n\nEach observation pairs one satellite Earth-fixed position with the pseudorange measured by the receiver."),
-            ("solve_position(...)", "fix = positioning.solve_position(observations)\nprint(fix.receiver_ecef)\nprint(fix.receiver_clock_bias_seconds)\nprint(fix.residuals_meters)\n\nThe solver estimates x, y, z, and receiver clock bias together. A clear ValueError is raised when fewer than four satellites are supplied or the satellite geometry is singular."),
+            ("solve_position(...)", "fix = positioning.solve_position(observations)\nprint(fix.receiver_ecef)\nprint(fix.receiver_clock_bias_seconds)\nprint(fix.residuals_meters)\n\nThe solver estimates x, y, z, and receiver clock bias together. A clear ValueError is raised when fewer than four satellites are supplied or the satellite geometry is singular. The visualizer uses this same API to compare the selected receiver's true and estimated Earth-fixed position."),
         ),
     ),
     DocumentationPage(
@@ -209,6 +211,7 @@ DOCUMENTATION_PAGES = (
             ("Camera", "Hold the left mouse button and drag to rotate the view around Earth."),
             ("Satellites", "Hover a satellite marker to display its Globalstar ID. Each colored marker follows its own inclined orbital plane."),
             ("Ground stations", "Orange markers show named stations. Click a front-facing marker to select it and inspect the live azimuth, elevation, range, and visibility table. Green dashed links connect stations to satellites at or above the elevation mask."),
+            ("Position fix", "The selected station also drives a simulated pseudorange fix. The receiver panel compares the true station position with the estimated position, clock bias, maximum residual, and 3D error; a dashed yellow ring marks the estimated receiver on Earth."),
             ("Time", "The four satellites use 113-116 minute orbital periods. Increase the orbital time scale to make changes easier to observe during a lesson."),
         ),
     ),
@@ -901,17 +904,47 @@ class EarthVisualizer(tk.Canvas):
             )
 
         if selected_station_scene is not None:
-            self._draw_visibility_table(selected_station_scene)
+            position_fix = build_receiver_position_fix_display(selected_station_scene)
+            self._draw_estimated_receiver_marker(position_fix, radius)
+            next_panel_y = self._draw_visibility_table(selected_station_scene)
+            self._draw_position_fix_panel(position_fix, next_panel_y)
 
         self.create_text(18, 18, text="ORBITAL VIEW", anchor="nw", fill=MUTED,
                          font=("Segoe UI", 9, "bold"))
-        self.create_text(18, height - 18, text="CLICK STATION FOR LIVE TABLE  |  DRAG TO ROTATE", anchor="sw",
+        self.create_text(18, height - 18, text="CLICK STATION FOR POSITION FIX  |  DRAG TO ROTATE", anchor="sw",
                          fill="#686d72", font=("Segoe UI", 8))
+
+    def _draw_estimated_receiver_marker(
+        self,
+        position_fix: ReceiverPositionFixDisplay,
+        radius: float,
+    ) -> None:
+        if position_fix.estimated_receiver_ecef is None:
+            return
+        estimated_point = self._display_position(
+            position_fix.estimated_receiver_ecef,
+            1.0,
+        )
+        estimated_x, estimated_y, estimated_depth = self._project(
+            estimated_point,
+            radius,
+        )
+        if estimated_depth < 0.0:
+            return
+        self.create_oval(
+            estimated_x - 10.0,
+            estimated_y - 10.0,
+            estimated_x + 10.0,
+            estimated_y + 10.0,
+            outline="#d6cc75",
+            width=2,
+            dash=(3, 3),
+        )
 
     def _draw_visibility_table(
         self,
         station_scene: GroundStationScene,
-    ) -> None:
+    ) -> float:
         rows = build_station_visibility_rows(station_scene)
         width = self.winfo_width()
         panel_width = min(360, max(264, width - 36))
@@ -1018,6 +1051,103 @@ class EarthVisualizer(tk.Canvas):
                     font=("Cascadia Mono", 8),
                     anchor=anchor,
                 )
+        return y1 + panel_height + 12
+
+    def _draw_position_fix_panel(
+        self,
+        position_fix: ReceiverPositionFixDisplay,
+        y1: float,
+    ) -> None:
+        width = self.winfo_width()
+        height = self.winfo_height()
+        panel_width = min(360, max(264, width - 36))
+        x1 = width - panel_width - 18
+        panel_height = 146 if position_fix.estimated_receiver_ecef is not None else 92
+        if y1 + panel_height > height - 36:
+            y1 = max(42, height - panel_height - 36)
+        rounded_rectangle(
+            self,
+            x1,
+            y1,
+            x1 + panel_width,
+            y1 + panel_height,
+            9,
+            fill="#25292c",
+            outline=BORDER,
+            width=1,
+        )
+        self.create_text(
+            x1 + 12,
+            y1 + 12,
+            text="RECEIVER POSITION FIX",
+            fill=TEXT,
+            font=("Segoe UI", 9, "bold"),
+            anchor="nw",
+        )
+        if position_fix.estimated_receiver_ecef is None:
+            self.create_text(
+                x1 + 12,
+                y1 + 42,
+                text="Solver diagnostic",
+                fill=MUTED,
+                font=("Segoe UI", 7, "bold"),
+                anchor="nw",
+            )
+            self.create_text(
+                x1 + 12,
+                y1 + 62,
+                text=position_fix.diagnostic or "Position fix unavailable",
+                fill="#d6cc75",
+                font=("Segoe UI", 8),
+                anchor="nw",
+                width=panel_width - 24,
+            )
+            return
+
+        estimated = position_fix.estimated_receiver_ecef
+        residuals = position_fix.residuals_meters
+        max_residual = max((abs(residual) for residual in residuals), default=0.0)
+        status = "CONVERGED" if position_fix.converged else "NOT CONVERGED"
+        rows = (
+            ("TRUE XYZ", self._format_ecef(position_fix.true_receiver_ecef)),
+            ("EST XYZ", self._format_ecef(estimated)),
+            ("3D ERROR", f"{position_fix.position_error_meters or 0.0:.3f} m"),
+            (
+                "CLOCK",
+                (
+                    f"true {position_fix.true_clock_bias_seconds * 1_000_000:.3f} us / "
+                    f"est {(position_fix.estimated_clock_bias_seconds or 0.0) * 1_000_000:.3f} us"
+                ),
+            ),
+            ("RESIDUALS", f"max {max_residual:.3f} m across {len(residuals)} sats"),
+            ("STATUS", status),
+        )
+        for index, (label, value) in enumerate(rows):
+            row_y = y1 + 40 + index * 17
+            self.create_text(
+                x1 + 12,
+                row_y,
+                text=label,
+                fill=MUTED,
+                font=("Segoe UI", 7, "bold"),
+                anchor="nw",
+            )
+            self.create_text(
+                x1 + 96,
+                row_y,
+                text=value,
+                fill=VISIBLE_LINK if label == "STATUS" and position_fix.converged else TEXT,
+                font=("Cascadia Mono", 8),
+                anchor="nw",
+            )
+
+    @staticmethod
+    def _format_ecef(position: CartesianPosition) -> str:
+        return (
+            f"{position.x_meters / 1000.0:,.1f}, "
+            f"{position.y_meters / 1000.0:,.1f}, "
+            f"{position.z_meters / 1000.0:,.1f} km"
+        )
 
     def _animate(self) -> None:
         now = time.perf_counter()

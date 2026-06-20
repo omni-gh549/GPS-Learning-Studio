@@ -61,6 +61,8 @@ Visualizer controls:
 - Hover a satellite dot to show its Globalstar ID
 - Orange markers show named ground stations
 - Click a ground station to inspect its live azimuth, elevation, range, and visibility table
+- The selected station also displays a simulated receiver position fix with true
+  ECEF position, estimated ECEF position, residuals, clock bias, and 3D error
 - Green dashed links show satellites above each station's elevation mask
 
 The Earth and satellites animate at real-time orbital rates. Use
@@ -154,7 +156,10 @@ The visualizer starts with an Aberdeen station using a 5-degree elevation mask
 and automatically redraws markers and links when stations are created, updated,
 or removed in the editor. Click any front-facing station marker to select it;
 the live table reports every satellite's look angles, range, and elevation-mask
-status using the same visibility results that drive the green links.
+status using the same visibility results that drive the green links. The
+receiver fix panel uses the selected station as the true receiver, generates
+pseudoranges to the visible constellation model, and reports the estimated
+position, residuals, receiver clock bias, and 3D position error.
 
 Click the documentation icon in the left sidebar for descriptions of the
 simulator, editor, file controls, and every public simulator function. The

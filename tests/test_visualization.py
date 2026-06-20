@@ -5,6 +5,7 @@ import unittest
 from gps_sim.ground_stations import GroundStation
 from gps_sim.visualization import (
     SatelliteSceneState,
+    build_receiver_position_fix_display,
     build_ground_station_scenes,
     build_station_visibility_rows,
 )
@@ -91,6 +92,45 @@ class VisualizationTests(unittest.TestCase):
         self.assertGreater(rows[0].range_meters, 20_000_000.0)
         self.assertTrue(rows[0].is_visible)
         self.assertFalse(rows[1].is_visible)
+
+    def test_builds_receiver_position_fix_display_for_selected_station(self) -> None:
+        station = GroundStation(0.0, 0.0, minimum_elevation_degrees=10.0)
+        satellites = (
+            SatelliteSceneState(1, 26_560_000.0, 0.0, 0.0, 0.0),
+            SatelliteSceneState(2, 26_560_000.0, 55.0, 90.0, 60.0),
+            SatelliteSceneState(3, 26_560_000.0, 55.0, 180.0, 130.0),
+            SatelliteSceneState(4, 26_560_000.0, 35.0, 270.0, 250.0),
+        )
+        scene = build_ground_station_scenes(
+            satellites,
+            {"Equator": station},
+            earth_rotation_degrees=0.0,
+        )[0]
+
+        display = build_receiver_position_fix_display(scene)
+
+        self.assertTrue(display.converged)
+        self.assertIsNotNone(display.estimated_receiver_ecef)
+        self.assertIsNotNone(display.estimated_clock_bias_seconds)
+        self.assertIsNotNone(display.position_error_meters)
+        self.assertLess(display.position_error_meters or 1.0, 0.001)
+        self.assertEqual(len(display.residuals_meters), 4)
+        self.assertLess(max(abs(residual) for residual in display.residuals_meters), 0.001)
+
+    def test_position_fix_display_reports_geometry_diagnostic(self) -> None:
+        station = GroundStation(0.0, 0.0)
+        scene = build_ground_station_scenes(
+            (SatelliteSceneState(1, 26_560_000.0, 0.0, 0.0, 0.0),),
+            {"Equator": station},
+            earth_rotation_degrees=0.0,
+        )[0]
+
+        display = build_receiver_position_fix_display(scene)
+
+        self.assertFalse(display.converged)
+        self.assertIsNone(display.estimated_receiver_ecef)
+        self.assertIsNone(display.position_error_meters)
+        self.assertIn("at least four", display.diagnostic or "")
 
 
 if __name__ == "__main__":
