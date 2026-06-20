@@ -154,6 +154,11 @@ The positioning module estimates receiver Earth-fixed x, y, z and receiver
 clock bias from four or more pseudorange observations. It uses a dependency-free
 iterative least-squares solver and raises clear diagnostics for insufficient or
 singular satellite geometry.
+Four satellites are normally required because the receiver must solve four
+unknowns at once: three Earth-fixed position coordinates plus receiver clock
+bias. Each pseudorange contributes one distance equation, so a fourth
+independent satellite lets the solver estimate clock bias instead of pretending
+the receiver clock is already synchronized.
 The visualizer starts with an Aberdeen station using a 5-degree elevation mask
 and automatically redraws markers and links when stations are created, updated,
 or removed in the editor. Click any front-facing station marker to select it;

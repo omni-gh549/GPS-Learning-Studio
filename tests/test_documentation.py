@@ -79,6 +79,25 @@ class DocumentationTests(unittest.TestCase):
         self.assertIn("solve_position", content)
         self.assertIn("clock bias", content.lower())
 
+    def test_positioning_docs_explain_four_satellite_requirement(self) -> None:
+        pages = {
+            page.title: page
+            for page in DOCUMENTATION_PAGES
+            if page.title in {"Positioning API", "Position fixes"}
+        }
+        content = "\n".join(
+            text
+            for page in pages.values()
+            for section in page.sections
+            for text in section
+        ).lower()
+
+        self.assertIn("why four satellites", content)
+        self.assertIn("four unknowns", content)
+        self.assertIn("x, y, z", content)
+        self.assertIn("clock bias", content)
+        self.assertIn("four equations", content)
+
     def test_orbital_view_documents_measurement_links(self) -> None:
         page = next(
             page for page in DOCUMENTATION_PAGES if page.title == "Orbital view"

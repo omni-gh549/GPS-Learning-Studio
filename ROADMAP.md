@@ -53,7 +53,7 @@ receiver calculate its position?"
   receiver position and clock bias.
 - [x] Display the true receiver position, estimated position, residuals, and error.
 - [x] Visualize range spheres or simplified measurement links.
-- [ ] Explain why four satellites are normally required for a 3D fix.
+- [x] Explain why four satellites are normally required for a 3D fix.
 - [ ] Replace the Position fixes placeholder with a worked trilateration lesson and
   a solver challenge.
 

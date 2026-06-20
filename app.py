@@ -192,6 +192,7 @@ DOCUMENTATION_PAGES = (
         (
             ("Import", "import gps_sim.positioning as positioning"),
             ("PseudorangeObservation(...)", "observation = positioning.PseudorangeObservation(\n    satellite_ecef=satellite_ecef,\n    pseudorange_meters=reading.pseudorange_meters,\n)\n\nEach observation pairs one satellite Earth-fixed position with the pseudorange measured by the receiver."),
+            ("Why four satellites?", "A 3D GPS fix has four unknowns: receiver x, y, z, and receiver clock bias. Each pseudorange adds one distance equation, so three satellites can constrain position only if the receiver clock is already known. A fourth satellite gives the solver enough independent equations to estimate clock bias at the same time as position."),
             ("solve_position(...)", "fix = positioning.solve_position(observations)\nprint(fix.receiver_ecef)\nprint(fix.receiver_clock_bias_seconds)\nprint(fix.residuals_meters)\n\nThe solver estimates x, y, z, and receiver clock bias together. A clear ValueError is raised when fewer than four satellites are supplied or the satellite geometry is singular. The visualizer uses this same API to compare the selected receiver's true and estimated Earth-fixed position."),
         ),
     ),
@@ -291,7 +292,16 @@ DOCUMENTATION_PAGES = (
         "Position fixes",
         "COMING SOON",
         "Estimate a receiver position from simulated pseudorange measurements.",
-        (("Planned page", "This lesson will cover range measurements, clock bias, trilateration, and the geometry needed for a four-satellite fix."),),
+        (
+            (
+                "Why four satellites?",
+                "Each pseudorange measurement says the receiver is somewhere on a sphere around one satellite, but the measured range also includes receiver clock error. A normal 3D fix therefore solves four unknowns together: x, y, z, and clock bias. Four independent satellites provide the four equations needed for that solve; extra satellites improve the least-squares fit and expose residual error.",
+            ),
+            (
+                "Planned page",
+                "A later lesson will turn this into a worked trilateration lab with range measurements, clock bias, solver setup, and a coding challenge.",
+            ),
+        ),
         placeholder=True,
     ),
     DocumentationPage(
