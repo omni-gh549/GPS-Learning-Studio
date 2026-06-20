@@ -64,6 +64,8 @@ Visualizer controls:
 - The selected station also displays a simulated receiver position fix with true
   ECEF position, estimated ECEF position, residuals, clock bias, and 3D error
 - Green dashed links show satellites above each station's elevation mask
+- Amber dashed links show the selected receiver's simplified pseudorange
+  measurements, with brighter links for satellites above the elevation mask
 
 The Earth and satellites animate at real-time orbital rates. Use
 `dynamics.set_orbital_time_scale(...)` in the editor when a faster classroom
@@ -158,8 +160,11 @@ or removed in the editor. Click any front-facing station marker to select it;
 the live table reports every satellite's look angles, range, and elevation-mask
 status using the same visibility results that drive the green links. The
 receiver fix panel uses the selected station as the true receiver, generates
-pseudoranges to the visible constellation model, and reports the estimated
-position, residuals, receiver clock bias, and 3D position error.
+pseudoranges to the current constellation model, and reports the estimated
+position, residuals, receiver clock bias, and 3D position error. Amber dashed
+measurement links connect the selected receiver to the satellites used by that
+pseudorange display, while muted amber keeps below-mask observations easy to
+compare with visible links.
 
 Click the documentation icon in the left sidebar for descriptions of the
 simulator, editor, file controls, and every public simulator function. The

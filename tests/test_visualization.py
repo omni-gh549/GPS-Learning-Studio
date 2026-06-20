@@ -5,6 +5,7 @@ import unittest
 from gps_sim.ground_stations import GroundStation
 from gps_sim.visualization import (
     SatelliteSceneState,
+    build_receiver_measurement_links,
     build_receiver_position_fix_display,
     build_ground_station_scenes,
     build_station_visibility_rows,
@@ -116,6 +117,33 @@ class VisualizationTests(unittest.TestCase):
         self.assertLess(display.position_error_meters or 1.0, 0.001)
         self.assertEqual(len(display.residuals_meters), 4)
         self.assertLess(max(abs(residual) for residual in display.residuals_meters), 0.001)
+
+    def test_builds_receiver_measurement_links_for_selected_station(self) -> None:
+        station = GroundStation(0.0, 0.0, minimum_elevation_degrees=10.0)
+        satellites = (
+            SatelliteSceneState(7, 26_560_000.0, 0.0, 0.0, 0.0),
+            SatelliteSceneState(8, 26_560_000.0, 0.0, 180.0, 0.0),
+        )
+        scene = build_ground_station_scenes(
+            satellites,
+            {"Equator": station},
+            earth_rotation_degrees=0.0,
+        )[0]
+
+        links = build_receiver_measurement_links(
+            scene,
+            receiver_clock_bias_seconds=0.000_001,
+        )
+
+        self.assertEqual([link.satellite_id for link in links], [7, 8])
+        self.assertTrue(links[0].is_visible)
+        self.assertFalse(links[1].is_visible)
+        self.assertGreater(links[0].geometric_range_meters, 20_000_000.0)
+        self.assertAlmostEqual(
+            links[0].pseudorange_meters - links[0].geometric_range_meters,
+            299.792458,
+        )
+        self.assertEqual(links[0].receiver_clock_bias_seconds, 0.000_001)
 
     def test_position_fix_display_reports_geometry_diagnostic(self) -> None:
         station = GroundStation(0.0, 0.0)

@@ -79,6 +79,23 @@ class DocumentationTests(unittest.TestCase):
         self.assertIn("solve_position", content)
         self.assertIn("clock bias", content.lower())
 
+    def test_orbital_view_documents_measurement_links(self) -> None:
+        page = next(
+            page for page in DOCUMENTATION_PAGES if page.title == "Orbital view"
+        )
+        content = "\n".join(
+            (page.title, page.eyebrow, page.summary)
+            + tuple(
+                text
+                for section in page.sections
+                for text in section
+            )
+        )
+
+        self.assertIn("Measurement links", content)
+        self.assertIn("pseudorange", content.lower())
+        self.assertIn("Amber", content)
+
 
 if __name__ == "__main__":
     unittest.main()

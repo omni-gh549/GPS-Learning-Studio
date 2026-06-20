@@ -28,6 +28,7 @@ from gps_sim.visualization import (
     GroundStationScene,
     ReceiverPositionFixDisplay,
     SatelliteSceneState,
+    build_receiver_measurement_links,
     build_receiver_position_fix_display,
     build_ground_station_scenes,
     build_station_visibility_rows,
@@ -45,6 +46,7 @@ ORBIT = "#555f67"
 SATELLITE_COLORS = ("#d7a86e", "#7db6a6", "#b58dc7", "#d6cc75")
 STATION = "#ef8f72"
 VISIBLE_LINK = "#86d5b4"
+MEASUREMENT_LINK = "#d6cc75"
 SATELLITE_ORBIT_RADIUS_METERS = WGS84_SEMI_MAJOR_AXIS_METERS * 1.58
 
 SIMULATOR_COMPLETIONS = (
@@ -211,6 +213,7 @@ DOCUMENTATION_PAGES = (
             ("Camera", "Hold the left mouse button and drag to rotate the view around Earth."),
             ("Satellites", "Hover a satellite marker to display its Globalstar ID. Each colored marker follows its own inclined orbital plane."),
             ("Ground stations", "Orange markers show named stations. Click a front-facing marker to select it and inspect the live azimuth, elevation, range, and visibility table. Green dashed links connect stations to satellites at or above the elevation mask."),
+            ("Measurement links", "Amber dashed links show the selected receiver's simplified pseudorange measurements to the satellites used by the position-fix display. Brighter amber means the satellite is above the station elevation mask; muted amber keeps below-mask observations visible for comparison."),
             ("Position fix", "The selected station also drives a simulated pseudorange fix. The receiver panel compares the true station position with the estimated position, clock bias, maximum residual, and 3D error; a dashed yellow ring marks the estimated receiver on Earth."),
             ("Time", "The four satellites use 113-116 minute orbital periods. Increase the orbital time scale to make changes easier to observe during a lesson."),
         ),
@@ -845,6 +848,13 @@ class EarthVisualizer(tk.Canvas):
                     dash=(4, 3),
                 )
 
+        if selected_station_scene is not None:
+            self._draw_measurement_links(
+                selected_station_scene,
+                projected_stations,
+                projected_satellites_by_id,
+            )
+
         for depth, sx, sy, sat in sorted(draw_order):
             dot_radius = 5.5 if sat.sat_id == self.hovered_id else 4.0
             self.create_oval(
@@ -911,8 +921,58 @@ class EarthVisualizer(tk.Canvas):
 
         self.create_text(18, 18, text="ORBITAL VIEW", anchor="nw", fill=MUTED,
                          font=("Segoe UI", 9, "bold"))
-        self.create_text(18, height - 18, text="CLICK STATION FOR POSITION FIX  |  DRAG TO ROTATE", anchor="sw",
-                         fill="#686d72", font=("Segoe UI", 8))
+        footer = (
+            "CLICK STATION FOR POSITION FIX  |  "
+            "AMBER LINKS ARE PSEUDORANGE MEASUREMENTS  |  DRAG TO ROTATE"
+        )
+        self.create_text(
+            18,
+            height - 18,
+            text=footer,
+            anchor="sw",
+            fill="#686d72",
+            font=("Segoe UI", 8),
+        )
+
+    def _draw_measurement_links(
+        self,
+        station_scene: GroundStationScene,
+        projected_stations: list[tuple[float, float, float, GroundStationScene]],
+        projected_satellites_by_id: dict[int, tuple[float, float, float]],
+    ) -> None:
+        station_projection = next(
+            (
+                (station_x, station_y, station_depth)
+                for station_depth, station_x, station_y, projected_scene
+                in projected_stations
+                if projected_scene.name == station_scene.name
+            ),
+            None,
+        )
+        if station_projection is None:
+            return
+        station_x, station_y, station_depth = station_projection
+        if station_depth < 0.0:
+            return
+
+        for measurement in build_receiver_measurement_links(station_scene):
+            satellite_projection = projected_satellites_by_id.get(
+                measurement.satellite_id
+            )
+            if satellite_projection is None:
+                continue
+            satellite_x, satellite_y, satellite_depth = satellite_projection
+            if satellite_depth < 0.0:
+                continue
+            self.create_line(
+                station_x,
+                station_y,
+                satellite_x,
+                satellite_y,
+                fill=MEASUREMENT_LINK if measurement.is_visible else "#77705d",
+                width=2.2 if measurement.is_visible else 1.2,
+                dash=(2, 3),
+            )
 
     def _draw_estimated_receiver_marker(
         self,

@@ -63,6 +63,18 @@ class StationVisibilityRow:
 
 
 @dataclass(frozen=True)
+class ReceiverMeasurementLink:
+    """Display-ready pseudorange measurement between receiver and satellite."""
+
+    satellite_id: int
+    satellite_ecef: CartesianPosition
+    geometric_range_meters: float
+    pseudorange_meters: float
+    receiver_clock_bias_seconds: float
+    is_visible: bool
+
+
+@dataclass(frozen=True)
 class ReceiverPositionFixDisplay:
     """Table-ready true and estimated receiver fix details."""
 
@@ -90,6 +102,33 @@ def build_station_visibility_rows(
         )
         for link in scene.satellite_links
     )
+
+
+def build_receiver_measurement_links(
+    scene: GroundStationScene,
+    receiver_clock_bias_seconds: float = 0.000_001,
+    signal_speed_meters_per_second: float = SPEED_OF_LIGHT_METERS_PER_SECOND,
+) -> tuple[ReceiverMeasurementLink, ...]:
+    """Build pseudorange measurement links from receiver to each satellite."""
+    measurement_links = []
+    for link in scene.satellite_links:
+        reading = calculate_pseudorange(
+            scene.station_ecef,
+            link.satellite_ecef,
+            receiver_clock_bias_seconds=receiver_clock_bias_seconds,
+            signal_speed_meters_per_second=signal_speed_meters_per_second,
+        )
+        measurement_links.append(
+            ReceiverMeasurementLink(
+                satellite_id=link.satellite_id,
+                satellite_ecef=link.satellite_ecef,
+                geometric_range_meters=reading.geometric_range_meters,
+                pseudorange_meters=reading.pseudorange_meters,
+                receiver_clock_bias_seconds=reading.receiver_clock_bias_seconds,
+                is_visible=link.visibility.is_visible,
+            )
+        )
+    return tuple(measurement_links)
 
 
 def build_receiver_position_fix_display(
@@ -198,10 +237,12 @@ def _cartesian_distance(
 
 __all__ = [
     "GroundStationScene",
+    "ReceiverMeasurementLink",
     "ReceiverPositionFixDisplay",
     "SatelliteLink",
     "SatelliteSceneState",
     "StationVisibilityRow",
+    "build_receiver_measurement_links",
     "build_receiver_position_fix_display",
     "build_ground_station_scenes",
     "build_station_visibility_rows",
