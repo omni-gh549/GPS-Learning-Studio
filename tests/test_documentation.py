@@ -79,6 +79,30 @@ class DocumentationTests(unittest.TestCase):
         self.assertIn("solve_position", content)
         self.assertIn("clock bias", content.lower())
 
+    def test_errors_api_page_documents_seeded_error_sources(self) -> None:
+        page = next(
+            page for page in DOCUMENTATION_PAGES if page.title == "Errors API"
+        )
+        content = "\n".join(
+            (page.title, page.eyebrow, page.summary)
+            + tuple(
+                text
+                for section in page.sections
+                for text in section
+            )
+        )
+
+        self.assertFalse(page.placeholder)
+        self.assertIn("gps_sim.errors", content)
+        self.assertIn("classroom_error_model", content)
+        self.assertIn("satellite clock", content.lower())
+        self.assertIn("receiver clock", content.lower())
+        self.assertIn("ionospheric delay", content.lower())
+        self.assertIn("tropospheric delay", content.lower())
+        self.assertIn("multipath", content.lower())
+        self.assertIn("measurement noise", content.lower())
+        self.assertIn("seed", content.lower())
+
     def test_positioning_docs_explain_four_satellite_requirement(self) -> None:
         pages = {
             page.title: page

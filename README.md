@@ -79,6 +79,7 @@ Import the module required by the functions you use:
 import gps_sim.constellation as constellation
 import gps_sim.coordinates as coordinates
 import gps_sim.dynamics as dynamics
+import gps_sim.errors as errors
 import gps_sim.ground_stations as ground_stations
 import gps_sim.measurements as measurements
 import gps_sim.positioning as positioning
@@ -123,6 +124,10 @@ reading = measurements.calculate_pseudorange(
 )
 print(clock_bias.range_error_meters())
 print(reading.geometric_range_meters, reading.pseudorange_meters)
+error_model = errors.classroom_error_model(seed=42)
+error = error_model.sample("Aberdeen-SV01")
+print(error.by_source())
+print(error_model.apply_to_pseudorange(reading.pseudorange_meters, "Aberdeen-SV01"))
 observation = positioning.PseudorangeObservation(
     satellite_ecef=ecef,
     pseudorange_meters=reading.pseudorange_meters,
@@ -150,6 +155,11 @@ The measurements module calculates straight-line geometric range and
 pseudorange, using a configurable receiver clock bias so timing-error examples
 remain deterministic. Clock bias can be set directly in seconds or created from
 an equivalent range error in meters.
+The errors module provides deterministic, seedable pseudorange error models for
+satellite clock, receiver clock, ionospheric delay, tropospheric delay,
+multipath, and measurement noise. A seed plus measurement key reproduces the
+same per-source offsets, which makes accuracy experiments repeatable while
+still letting students compare different satellites or scenarios.
 The positioning module estimates receiver Earth-fixed x, y, z and receiver
 clock bias from four or more pseudorange observations. It uses a dependency-free
 iterative least-squares solver and raises clear diagnostics for insufficient or

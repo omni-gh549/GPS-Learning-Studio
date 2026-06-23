@@ -9,6 +9,7 @@ a = Analysis(
         "gps_sim.constellation",
         "gps_sim.coordinates",
         "gps_sim.dynamics",
+        "gps_sim.errors",
         "gps_sim.ground_stations",
         "gps_sim.measurements",
         "gps_sim.positioning",

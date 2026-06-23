@@ -74,7 +74,7 @@ source.
 
 ### Features
 
-- [ ] Add deterministic, seedable models for satellite clock, receiver clock,
+- [x] Add deterministic, seedable models for satellite clock, receiver clock,
   ionospheric delay, tropospheric delay, multipath, and measurement noise.
 - [ ] Allow each error source to be enabled, disabled, and scaled independently.
 - [ ] Calculate residuals, horizontal error, vertical error, and 3D position error.
