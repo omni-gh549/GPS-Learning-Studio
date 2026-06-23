@@ -290,19 +290,73 @@ DOCUMENTATION_PAGES = (
     ),
     DocumentationPage(
         "Position fixes",
-        "COMING SOON",
-        "Estimate a receiver position from simulated pseudorange measurements.",
+        "20 MINUTE LESSON",
+        "Work from pseudorange measurements to a solved receiver position and clock bias.",
         (
+            (
+                "Learning objectives",
+                "Explain trilateration as intersecting distance constraints, account for receiver clock bias, build PseudorangeObservation inputs, and check a solved receiver position against a known truth.",
+            ),
+            (
+                "1. Start with ranges",
+                "A geometric range is the straight-line distance from a receiver to one satellite. A pseudorange is what the receiver measures before its clock is perfectly synchronized, so it includes geometric range plus receiver clock bias converted into meters.\n\n"
+                "import gps_sim.measurements as measurements\n\n"
+                "clock_bias = measurements.ReceiverClockBias(seconds=0.000001)\n"
+                "print(round(clock_bias.range_error_meters(), 3))",
+            ),
             (
                 "Why four satellites?",
                 "Each pseudorange measurement says the receiver is somewhere on a sphere around one satellite, but the measured range also includes receiver clock error. A normal 3D fix therefore solves four unknowns together: x, y, z, and clock bias. Four independent satellites provide the four equations needed for that solve; extra satellites improve the least-squares fit and expose residual error.",
             ),
             (
-                "Planned page",
-                "A later lesson will turn this into a worked trilateration lab with range measurements, clock bias, solver setup, and a coding challenge.",
+                "2. Build observations",
+                "The solver needs one satellite Earth-fixed position and one pseudorange per observation. This worked lab uses a known receiver position so you can verify the solution.\n\n"
+                "from gps_sim.coordinates import CartesianPosition\n"
+                "import gps_sim.measurements as measurements\n"
+                "import gps_sim.positioning as positioning\n\n"
+                "receiver = CartesianPosition(1_000_000.0, -2_000_000.0, 3_000_000.0)\n"
+                "satellites = [\n"
+                "    CartesianPosition(20_200_000.0, 0.0, 0.0),\n"
+                "    CartesianPosition(0.0, 21_200_000.0, 1_000_000.0),\n"
+                "    CartesianPosition(1_500_000.0, 0.0, 22_200_000.0),\n"
+                "    CartesianPosition(-20_500_000.0, -8_000_000.0, 12_000_000.0),\n"
+                "]\n"
+                "observations = []\n"
+                "for satellite in satellites:\n"
+                "    reading = measurements.calculate_pseudorange(\n"
+                "        receiver,\n"
+                "        satellite,\n"
+                "        receiver_clock_bias_seconds=0.0000015,\n"
+                "    )\n"
+                "    observations.append(positioning.PseudorangeObservation(\n"
+                "        satellite_ecef=satellite,\n"
+                "        pseudorange_meters=reading.pseudorange_meters,\n"
+                "    ))",
+            ),
+            (
+                "3. Solve and check",
+                "Run the solver, compare estimated x, y, z with the true receiver, and inspect the residuals. In this noise-free lab the maximum residual should be tiny.\n\n"
+                "fix = positioning.solve_position(observations)\n"
+                "print(fix.converged, fix.iterations)\n"
+                "print(round(fix.receiver_ecef.x_meters - receiver.x_meters, 6))\n"
+                "print(round(fix.receiver_ecef.y_meters - receiver.y_meters, 6))\n"
+                "print(round(fix.receiver_ecef.z_meters - receiver.z_meters, 6))\n"
+                "print(round(fix.receiver_clock_bias_seconds, 10))\n"
+                "print(round(max(abs(value) for value in fix.residuals_meters), 6))",
+            ),
+            (
+                "Coding challenge",
+                "Add a fifth satellite observation, then change one pseudorange by 25 meters to simulate measurement error. Solve again and print the 3D position error plus every residual. The position should still solve, but the residuals should reveal that the measurements no longer agree perfectly.",
+            ),
+            (
+                "Success check",
+                "Your code should use CartesianPosition, calculate_pseudorange, PseudorangeObservation, and solve_position. With the original four noise-free observations, the solved receiver coordinates should be within 0.01 meters of the true receiver and the clock bias should be within 1e-10 seconds.",
+            ),
+            (
+                "Stretch goal",
+                "Move one satellite close to another and rerun the solver. If the geometry becomes singular or poorly conditioned, catch the ValueError and explain why satellite placement matters as much as the number of satellites.",
             ),
         ),
-        placeholder=True,
     ),
     DocumentationPage(
         "Error and accuracy",

@@ -176,3 +176,6 @@ simulator, editor, file controls, and every public simulator function. The
 Ground stations lesson is a guided 15-minute lab covering latitude/longitude,
 look angles, elevation masks, pass visibility, and an editor-ready coding
 challenge.
+The Position fixes lesson is a worked trilateration lab covering pseudorange
+generation, receiver clock bias, solver setup, residual checks, and a solver
+challenge.

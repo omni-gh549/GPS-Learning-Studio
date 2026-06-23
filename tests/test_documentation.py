@@ -98,6 +98,41 @@ class DocumentationTests(unittest.TestCase):
         self.assertIn("clock bias", content)
         self.assertIn("four equations", content)
 
+    def test_position_fixes_page_is_a_complete_guided_lesson(self) -> None:
+        page = next(
+            page for page in DOCUMENTATION_PAGES if page.title == "Position fixes"
+        )
+        content = "\n".join(
+            (page.title, page.eyebrow, page.summary)
+            + tuple(
+                text
+                for section in page.sections
+                for text in section
+            )
+        )
+
+        self.assertFalse(page.placeholder)
+        self.assertIn("Learning objectives", content)
+        self.assertIn("trilateration", content.lower())
+        self.assertIn("pseudorange", content.lower())
+        self.assertIn("clock bias", content.lower())
+        self.assertIn("residual", content.lower())
+
+    def test_position_fixes_lesson_includes_solver_challenge_path(self) -> None:
+        page = next(
+            page for page in DOCUMENTATION_PAGES if page.title == "Position fixes"
+        )
+        sections = dict(page.sections)
+        lesson_text = "\n".join(sections.values())
+
+        self.assertIn("Coding challenge", sections)
+        self.assertIn("Success check", sections)
+        self.assertIn("Stretch goal", sections)
+        self.assertIn("CartesianPosition", lesson_text)
+        self.assertIn("calculate_pseudorange", lesson_text)
+        self.assertIn("PseudorangeObservation", lesson_text)
+        self.assertIn("solve_position", lesson_text)
+
     def test_orbital_view_documents_measurement_links(self) -> None:
         page = next(
             page for page in DOCUMENTATION_PAGES if page.title == "Orbital view"
