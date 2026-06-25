@@ -80,6 +80,7 @@ SIMULATOR_COMPLETIONS = (
     ("positioning.PseudorangeObservation(...)", "positioning.PseudorangeObservation(satellite_ecef, pseudorange_meters)", "#7db6a6"),
     ("positioning.solve_position(...)", "positioning.solve_position(observations)", "#7db6a6"),
     ("positioning.calculate_position_error(...)", "positioning.calculate_position_error(fix, station_ecef, station)", "#7db6a6"),
+    ("positioning.calculate_dilution_of_precision(...)", "positioning.calculate_dilution_of_precision(observations, station_ecef, station)", "#7db6a6"),
     ("visibility.calculate_visibility(...)", "visibility.calculate_visibility(ecef, station)", "#7db6a6"),
     ("print(value)  e.g. print(\"Satellite state\")", "print()", "#c59bcf"),
     ("len(iterable)  e.g. len(states)", "len()", "#c59bcf"),
@@ -193,13 +194,14 @@ DOCUMENTATION_PAGES = (
     DocumentationPage(
         "Positioning API",
         "API REFERENCE",
-        "Estimate receiver ECEF position and clock bias from four or more pseudoranges.",
+        "Estimate receiver ECEF position, clock bias, and satellite-geometry quality from pseudoranges.",
         (
             ("Import", "import gps_sim.positioning as positioning"),
             ("PseudorangeObservation(...)", "observation = positioning.PseudorangeObservation(\n    satellite_ecef=satellite_ecef,\n    pseudorange_meters=reading.pseudorange_meters,\n)\n\nEach observation pairs one satellite Earth-fixed position with the pseudorange measured by the receiver."),
             ("Why four satellites?", "A 3D GPS fix has four unknowns: receiver x, y, z, and receiver clock bias. Each pseudorange adds one distance equation, so three satellites can constrain position only if the receiver clock is already known. A fourth satellite gives the solver enough independent equations to estimate clock bias at the same time as position."),
             ("solve_position(...)", "fix = positioning.solve_position(observations)\nprint(fix.receiver_ecef)\nprint(fix.receiver_clock_bias_seconds)\nprint(fix.residuals_meters)\n\nThe solver estimates x, y, z, and receiver clock bias together. A clear ValueError is raised when fewer than four satellites are supplied or the satellite geometry is singular."),
             ("calculate_position_error(...)", "report = positioning.calculate_position_error(\n    fix,\n    true_receiver_ecef=station_ecef,\n    reference_station=station,\n)\nprint(report.max_abs_residual_meters)\nprint(report.horizontal_error_meters)\nprint(report.vertical_error_meters)\nprint(report.position_error_meters)\n\nThe report keeps residual statistics and splits ECEF position error into local horizontal, vertical, and 3D components for accuracy experiments."),
+            ("calculate_dilution_of_precision(...)", "dop = positioning.calculate_dilution_of_precision(\n    observations,\n    receiver_ecef=station_ecef,\n    reference_station=station,\n)\nprint(dop.gdop, dop.pdop)\nprint(dop.hdop, dop.vdop)\n\nGDOP, PDOP, HDOP, and VDOP are dimensionless satellite-geometry multipliers. Lower values mean the satellites are spread in a way that better constrains the receiver solution."),
         ),
     ),
     DocumentationPage(

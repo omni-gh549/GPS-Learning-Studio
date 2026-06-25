@@ -15,6 +15,7 @@ from gps_sim.measurements import (
 from gps_sim.positioning import (
     PseudorangeObservation,
     PositionFix,
+    calculate_dilution_of_precision,
     calculate_position_error,
     solve_position,
 )
@@ -94,6 +95,39 @@ class PositioningTests(unittest.TestCase):
         self.assertAlmostEqual(report.vertical_error_meters, -2.0, places=6)
         self.assertAlmostEqual(report.position_error_meters, 29.0 ** 0.5, places=6)
 
+
+    def test_calculates_satellite_geometry_dop_metrics(self) -> None:
+        receiver = CartesianPosition(1_000_000.0, -2_000_000.0, 3_000_000.0)
+        station = GroundStation(45.0, -3.0)
+        observations = _observations(receiver, 0.0)
+        extra_satellite = CartesianPosition(21_000_000.0, 12_000_000.0, 17_000_000.0)
+        extra_reading = calculate_pseudorange(receiver, extra_satellite)
+        observations.append(
+            PseudorangeObservation(
+                satellite_ecef=extra_satellite,
+                pseudorange_meters=extra_reading.pseudorange_meters,
+            )
+        )
+
+        four_satellite_report = calculate_dilution_of_precision(
+            observations[:4],
+            receiver,
+            station,
+        )
+        five_satellite_report = calculate_dilution_of_precision(
+            observations,
+            receiver,
+            station,
+        )
+
+        self.assertEqual(four_satellite_report.satellite_count, 4)
+        self.assertAlmostEqual(four_satellite_report.gdop, 2.0746447371)
+        self.assertAlmostEqual(four_satellite_report.pdop, 1.9389290401)
+        self.assertAlmostEqual(four_satellite_report.hdop, 1.5087461354)
+        self.assertAlmostEqual(four_satellite_report.vdop, 1.2178386271)
+        self.assertLess(five_satellite_report.gdop, four_satellite_report.gdop)
+        self.assertLess(five_satellite_report.pdop, four_satellite_report.pdop)
+
     def test_rejects_invalid_or_poor_geometry_inputs(self) -> None:
         satellite = CartesianPosition(20_200_000.0, 0.0, 0.0)
 
@@ -109,6 +143,18 @@ class PositioningTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "singular|poorly conditioned"):
             solve_position(
                 [PseudorangeObservation(satellite, 20_200_000.0)] * 4,
+            )
+        with self.assertRaisesRegex(ValueError, "at least four"):
+            calculate_dilution_of_precision(
+                [PseudorangeObservation(satellite, 20_200_000.0)],
+                CartesianPosition(0.0, 0.0, 0.0),
+                GroundStation(0.0, 0.0),
+            )
+        with self.assertRaisesRegex(ValueError, "singular|poorly conditioned"):
+            calculate_dilution_of_precision(
+                [PseudorangeObservation(satellite, 20_200_000.0)] * 4,
+                CartesianPosition(0.0, 0.0, 0.0),
+                GroundStation(0.0, 0.0),
             )
 
 

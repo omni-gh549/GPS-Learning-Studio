@@ -144,10 +144,16 @@ observations = [
 if len(observations) >= 4:
     fix = positioning.solve_position(observations)
     report = positioning.calculate_position_error(fix, station_ecef, station)
+    dop = positioning.calculate_dilution_of_precision(
+        observations,
+        receiver_ecef=station_ecef,
+        reference_station=station,
+    )
     print(fix.receiver_ecef, fix.receiver_clock_bias_seconds)
     print(report.max_abs_residual_meters)
     print(report.horizontal_error_meters, report.vertical_error_meters)
     print(report.position_error_meters)
+    print(dop.gdop, dop.pdop, dop.hdop, dop.vdop)
 ```
 
 `GroundStation` validates latitude, longitude, altitude, and elevation-mask
@@ -175,6 +181,9 @@ clock bias from four or more pseudorange observations. It uses a dependency-free
 iterative least-squares solver and raises clear diagnostics for insufficient or
 singular satellite geometry. Its accuracy report calculates residual statistics
 and splits position error into local horizontal, vertical, and 3D components.
+It also calculates GDOP, PDOP, HDOP, and VDOP from the satellite geometry,
+using a reference station to split position geometry into local horizontal and
+vertical components.
 Four satellites are normally required because the receiver must solve four
 unknowns at once: three Earth-fixed position coordinates plus receiver clock
 bias. Each pseudorange contributes one distance equation, so a fourth

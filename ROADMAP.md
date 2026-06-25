@@ -78,7 +78,7 @@ source.
   ionospheric delay, tropospheric delay, multipath, and measurement noise.
 - [x] Allow each error source to be enabled, disabled, and scaled independently.
 - [x] Calculate residuals, horizontal error, vertical error, and 3D position error.
-- [ ] Calculate satellite geometry metrics including GDOP, PDOP, HDOP, and VDOP.
+- [x] Calculate satellite geometry metrics including GDOP, PDOP, HDOP, and VDOP.
 - [ ] Add a before/after comparison view and time-series error plot.
 - [ ] Replace the Error and accuracy placeholder with controlled experiments.
 

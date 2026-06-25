@@ -91,6 +91,26 @@ class PositionErrorReport:
             raise ValueError("position_error_meters must not be negative")
 
 
+@dataclass(frozen=True)
+class DilutionOfPrecisionReport:
+    """Satellite geometry quality metrics for a receiver fix."""
+
+    satellite_count: int
+    gdop: float
+    pdop: float
+    hdop: float
+    vdop: float
+
+    def __post_init__(self) -> None:
+        if self.satellite_count < 4:
+            raise ValueError("satellite_count must be at least four")
+        for name in ("gdop", "pdop", "hdop", "vdop"):
+            value = getattr(self, name)
+            _require_finite(name, value)
+            if value < 0.0:
+                raise ValueError(f"{name} must not be negative")
+
+
 def solve_position(
     observations: Sequence[PseudorangeObservation],
     initial_receiver_ecef: CartesianPosition | None = None,
@@ -157,6 +177,43 @@ def solve_position(
         residuals_meters=final_residuals,
         iterations=iterations,
         converged=converged,
+    )
+
+
+def calculate_dilution_of_precision(
+    observations: Sequence[PseudorangeObservation],
+    receiver_ecef: CartesianPosition,
+    reference_station: GroundStation,
+) -> DilutionOfPrecisionReport:
+    """Calculate GDOP, PDOP, HDOP, and VDOP from satellite geometry.
+
+    DOP values are dimensionless multipliers. Lower values indicate that the
+    satellites are spread across the sky in a way that better constrains the
+    receiver solution. The reference station defines the local east-north-up
+    frame used to split position geometry into horizontal and vertical DOP.
+    """
+    if len(observations) < 4:
+        raise ValueError("at least four pseudorange observations are required")
+
+    rows = _geometry_rows(observations, receiver_ecef)
+    covariance = _invert_normal_matrix(rows)
+    position_covariance = [row[:3] for row in covariance[:3]]
+    local_covariance = _ecef_covariance_to_local_horizon(
+        position_covariance,
+        reference_station,
+    )
+    pdop = math.sqrt(_nonnegative_trace(position_covariance))
+    gdop = math.sqrt(_nonnegative_trace(covariance))
+    hdop = math.sqrt(
+        max(0.0, local_covariance[0][0] + local_covariance[1][1])
+    )
+    vdop = math.sqrt(max(0.0, local_covariance[2][2]))
+    return DilutionOfPrecisionReport(
+        satellite_count=len(observations),
+        gdop=gdop,
+        pdop=pdop,
+        hdop=hdop,
+        vdop=vdop,
     )
 
 
@@ -247,6 +304,76 @@ def _residuals(
     return tuple(residuals)
 
 
+def _geometry_rows(
+    observations: Sequence[PseudorangeObservation],
+    receiver_ecef: CartesianPosition,
+) -> list[list[float]]:
+    rows: list[list[float]] = []
+    for observation in observations:
+        satellite = observation.satellite_ecef
+        dx = receiver_ecef.x_meters - satellite.x_meters
+        dy = receiver_ecef.y_meters - satellite.y_meters
+        dz = receiver_ecef.z_meters - satellite.z_meters
+        range_meters = math.sqrt(dx * dx + dy * dy + dz * dz)
+        if range_meters == 0.0:
+            raise ValueError("receiver position cannot equal a satellite position")
+        rows.append([dx / range_meters, dy / range_meters, dz / range_meters, 1.0])
+    return rows
+
+
+def _invert_normal_matrix(rows: Sequence[Sequence[float]]) -> list[list[float]]:
+    normal_matrix = [[0.0 for _ in range(4)] for _ in range(4)]
+    for row in rows:
+        for row_index in range(4):
+            for column_index in range(4):
+                normal_matrix[row_index][column_index] += (
+                    row[row_index] * row[column_index]
+                )
+    inverse_columns = []
+    for column_index in range(4):
+        rhs = [0.0, 0.0, 0.0, 0.0]
+        rhs[column_index] = 1.0
+        inverse_columns.append(_solve_4x4([row[:] for row in normal_matrix], rhs))
+    return [
+        [inverse_columns[column_index][row_index] for column_index in range(4)]
+        for row_index in range(4)
+    ]
+
+
+def _ecef_covariance_to_local_horizon(
+    covariance: Sequence[Sequence[float]],
+    reference_station: GroundStation,
+) -> list[list[float]]:
+    latitude = math.radians(reference_station.latitude_degrees)
+    longitude = math.radians(reference_station.longitude_degrees)
+    sin_lat = math.sin(latitude)
+    cos_lat = math.cos(latitude)
+    sin_lon = math.sin(longitude)
+    cos_lon = math.cos(longitude)
+    basis = (
+        (-sin_lon, cos_lon, 0.0),
+        (-sin_lat * cos_lon, -sin_lat * sin_lon, cos_lat),
+        (cos_lat * cos_lon, cos_lat * sin_lon, sin_lat),
+    )
+    return [
+        [
+            sum(
+                basis[row_index][ecef_row]
+                * covariance[ecef_row][ecef_column]
+                * basis[column_index][ecef_column]
+                for ecef_row in range(3)
+                for ecef_column in range(3)
+            )
+            for column_index in range(3)
+        ]
+        for row_index in range(3)
+    ]
+
+
+def _nonnegative_trace(matrix: Sequence[Sequence[float]]) -> float:
+    return max(0.0, sum(matrix[index][index] for index in range(len(matrix))))
+
+
 def _ecef_delta_to_local_horizon(
     delta: CartesianPosition,
     reference_station: GroundStation,
@@ -307,9 +434,11 @@ def _solve_4x4(matrix: list[list[float]], rhs: list[float]) -> list[float]:
 
 
 __all__ = [
+    "DilutionOfPrecisionReport",
     "PositionErrorReport",
     "PositionFix",
     "PseudorangeObservation",
+    "calculate_dilution_of_precision",
     "calculate_position_error",
     "solve_position",
 ]
