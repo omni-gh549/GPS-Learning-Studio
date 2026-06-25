@@ -57,6 +57,47 @@ class ErrorModelTests(unittest.TestCase):
         self.assertEqual(model.sample("fixed").total_meters, 21.0)
         self.assertEqual(model.apply_to_pseudorange(20_200_000.0, "fixed"), 20_200_021.0)
 
+    def test_sources_can_be_disabled_independently(self) -> None:
+        model = classroom_error_model(seed=42)
+        baseline = model.sample("satellite-1").by_source()
+
+        disabled = model.with_source_settings("multipath", enabled=False)
+        disabled_offsets = disabled.sample("satellite-1").by_source()
+
+        self.assertEqual(disabled_offsets["multipath"], 0.0)
+        for source_name in ERROR_SOURCE_NAMES:
+            if source_name != "multipath":
+                self.assertEqual(disabled_offsets[source_name], baseline[source_name])
+        self.assertFalse(disabled.source("multipath").enabled)
+
+    def test_sources_can_be_scaled_independently(self) -> None:
+        model = MeasurementErrorModel(
+            seed=0,
+            satellite_clock=ErrorSourceModel("satellite_clock", 1.0),
+            receiver_clock=ErrorSourceModel("receiver_clock", 2.0),
+            ionospheric_delay=ErrorSourceModel("ionospheric_delay", 3.0),
+            tropospheric_delay=ErrorSourceModel("tropospheric_delay", 4.0),
+            multipath=ErrorSourceModel("multipath", 5.0),
+            measurement_noise=ErrorSourceModel("measurement_noise", 6.0),
+        )
+
+        scaled = model.with_source_settings("ionospheric_delay", scale=2.5)
+        offsets = scaled.sample("fixed").by_source()
+
+        self.assertEqual(offsets["ionospheric_delay"], 7.5)
+        self.assertEqual(offsets["satellite_clock"], 1.0)
+        self.assertEqual(offsets["measurement_noise"], 6.0)
+        self.assertEqual(scaled.source("ionospheric_delay").scale, 2.5)
+
+    def test_disabled_source_remains_zero_even_when_scaled(self) -> None:
+        model = classroom_error_model(seed=42).with_source_settings(
+            "receiver_clock",
+            enabled=False,
+            scale=10.0,
+        )
+
+        self.assertEqual(model.sample("satellite-1").by_source()["receiver_clock"], 0.0)
+
     def test_clock_error_source_converts_seconds_to_range(self) -> None:
         source = clock_error_source(
             "receiver_clock",
@@ -78,6 +119,8 @@ class ErrorModelTests(unittest.TestCase):
             ErrorSourceModel("")
         with self.assertRaisesRegex(ValueError, "standard_deviation"):
             ErrorSourceModel("measurement_noise", standard_deviation_meters=-1.0)
+        with self.assertRaisesRegex(ValueError, "scale"):
+            ErrorSourceModel("measurement_noise", scale=-1.0)
         with self.assertRaisesRegex(ValueError, "unique"):
             MeasurementError(
                 (
@@ -99,6 +142,8 @@ class ErrorModelTests(unittest.TestCase):
             clock_error_source("receiver_clock", jitter_seconds=-1.0)
         with self.assertRaisesRegex(ValueError, "pseudorange_meters"):
             classroom_error_model(seed=0).sample().apply_to_pseudorange(float("nan"))
+        with self.assertRaisesRegex(ValueError, "unknown error source"):
+            classroom_error_model(seed=0).with_source_settings("solar_wind", enabled=False)
 
 
 if __name__ == "__main__":

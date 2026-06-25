@@ -47,22 +47,49 @@ class ErrorSourceModel:
     name: str
     bias_meters: float = 0.0
     standard_deviation_meters: float = 0.0
+    enabled: bool = True
+    scale: float = 1.0
 
     def __post_init__(self) -> None:
         if not self.name:
             raise ValueError("name must not be empty")
         _require_finite("bias_meters", self.bias_meters)
         _require_finite("standard_deviation_meters", self.standard_deviation_meters)
+        _require_finite("scale", self.scale)
         if self.standard_deviation_meters < 0.0:
             raise ValueError("standard_deviation_meters must not be negative")
+        if self.scale < 0.0:
+            raise ValueError("scale must not be negative")
 
     def sample(self, seed: int, measurement_key: str = "") -> "ErrorContribution":
         """Return this source's deterministic contribution for one measurement."""
+        if not self.enabled:
+            return ErrorContribution(self.name, 0.0)
         offset = self.bias_meters
         if self.standard_deviation_meters:
             rng = random.Random(_stable_seed(seed, measurement_key, self.name))
             offset += rng.gauss(0.0, self.standard_deviation_meters)
-        return ErrorContribution(self.name, offset)
+        return ErrorContribution(self.name, offset * self.scale)
+
+    def with_enabled(self, enabled: bool) -> "ErrorSourceModel":
+        """Return a copy with this source enabled or disabled."""
+        return ErrorSourceModel(
+            name=self.name,
+            bias_meters=self.bias_meters,
+            standard_deviation_meters=self.standard_deviation_meters,
+            enabled=enabled,
+            scale=self.scale,
+        )
+
+    def with_scale(self, scale: float) -> "ErrorSourceModel":
+        """Return a copy with this source scaled by a non-negative multiplier."""
+        return ErrorSourceModel(
+            name=self.name,
+            bias_meters=self.bias_meters,
+            standard_deviation_meters=self.standard_deviation_meters,
+            enabled=self.enabled,
+            scale=scale,
+        )
 
 
 @dataclass(frozen=True)
@@ -150,6 +177,46 @@ class MeasurementErrorModel:
     ) -> float:
         """Sample this model and add its total error to a pseudorange."""
         return self.sample(measurement_key).apply_to_pseudorange(pseudorange_meters)
+
+    def source(self, source_name: str) -> ErrorSourceModel:
+        """Return one source model by standard name."""
+        for source in self.sources:
+            if source.name == source_name:
+                return source
+        raise ValueError(f"unknown error source: {source_name}")
+
+    def with_source_settings(
+        self,
+        source_name: str,
+        *,
+        enabled: bool | None = None,
+        scale: float | None = None,
+    ) -> "MeasurementErrorModel":
+        """Return a copy with one source enabled, disabled, or scaled."""
+        updated_sources = []
+        found = False
+        for source in self.sources:
+            if source.name != source_name:
+                updated_sources.append(source)
+                continue
+            found = True
+            updated = source
+            if enabled is not None:
+                updated = updated.with_enabled(enabled)
+            if scale is not None:
+                updated = updated.with_scale(scale)
+            updated_sources.append(updated)
+        if not found:
+            raise ValueError(f"unknown error source: {source_name}")
+        return MeasurementErrorModel(
+            seed=self.seed,
+            satellite_clock=updated_sources[0],
+            receiver_clock=updated_sources[1],
+            ionospheric_delay=updated_sources[2],
+            tropospheric_delay=updated_sources[3],
+            multipath=updated_sources[4],
+            measurement_noise=updated_sources[5],
+        )
 
 
 def clock_error_source(

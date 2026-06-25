@@ -127,6 +127,10 @@ print(reading.geometric_range_meters, reading.pseudorange_meters)
 error_model = errors.classroom_error_model(seed=42)
 error = error_model.sample("Aberdeen-SV01")
 print(error.by_source())
+ionosphere_lab = error_model.with_source_settings("ionospheric_delay", scale=2.0)
+no_multipath = error_model.with_source_settings("multipath", enabled=False)
+print(ionosphere_lab.sample("Aberdeen-SV01").by_source()["ionospheric_delay"])
+print(no_multipath.sample("Aberdeen-SV01").by_source()["multipath"])
 print(error_model.apply_to_pseudorange(reading.pseudorange_meters, "Aberdeen-SV01"))
 observation = positioning.PseudorangeObservation(
     satellite_ecef=ecef,
@@ -159,7 +163,9 @@ The errors module provides deterministic, seedable pseudorange error models for
 satellite clock, receiver clock, ionospheric delay, tropospheric delay,
 multipath, and measurement noise. A seed plus measurement key reproduces the
 same per-source offsets, which makes accuracy experiments repeatable while
-still letting students compare different satellites or scenarios.
+still letting students compare different satellites or scenarios. Each standard
+source can be enabled, disabled, and scaled independently, so a lesson can
+isolate one component without changing the other sampled offsets.
 The positioning module estimates receiver Earth-fixed x, y, z and receiver
 clock bias from four or more pseudorange observations. It uses a dependency-free
 iterative least-squares solver and raises clear diagnostics for insufficient or

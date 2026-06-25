@@ -76,7 +76,7 @@ source.
 
 - [x] Add deterministic, seedable models for satellite clock, receiver clock,
   ionospheric delay, tropospheric delay, multipath, and measurement noise.
-- [ ] Allow each error source to be enabled, disabled, and scaled independently.
+- [x] Allow each error source to be enabled, disabled, and scaled independently.
 - [ ] Calculate residuals, horizontal error, vertical error, and 3D position error.
 - [ ] Calculate satellite geometry metrics including GDOP, PDOP, HDOP, and VDOP.
 - [ ] Add a before/after comparison view and time-series error plot.

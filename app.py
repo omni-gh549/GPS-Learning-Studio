@@ -72,6 +72,7 @@ SIMULATOR_COMPLETIONS = (
     ("coordinates.eci_to_ecef(...)", "coordinates.eci_to_ecef(eci, 0.0)", "#7db6a6"),
     ("coordinates.ecef_to_local_horizon(...)", "coordinates.ecef_to_local_horizon(ecef, station)", "#7db6a6"),
     ("errors.classroom_error_model(seed=42)", "errors.classroom_error_model(seed=42)", "#7db6a6"),
+    ("error_model.with_source_settings(...)", "error_model.with_source_settings(\"multipath\", enabled=False)", "#7db6a6"),
     ("errors.clock_error_source(...)", "errors.clock_error_source(\"receiver_clock\", bias_seconds=1e-8)", "#7db6a6"),
     ("measurements.ReceiverClockBias(...)", "measurements.ReceiverClockBias(seconds=0.000001)", "#7db6a6"),
     ("measurements.geometric_range(...)", "measurements.geometric_range(receiver_ecef, satellite_ecef)", "#7db6a6"),
@@ -206,6 +207,7 @@ DOCUMENTATION_PAGES = (
         (
             ("Import", "import gps_sim.errors as errors"),
             ("classroom_error_model(seed)", "model = errors.classroom_error_model(seed=42)\nerror = model.sample(measurement_key=\"satellite-1\")\nprint(error.by_source())\nprint(error.total_meters)\n\nThe classroom profile includes satellite clock, receiver clock, ionospheric delay, tropospheric delay, multipath, and measurement noise. The same seed and measurement key always produce the same offsets."),
+            ("with_source_settings(...)", "iono_only = model.with_source_settings(\"multipath\", enabled=False)\nscaled = model.with_source_settings(\"ionospheric_delay\", scale=2.0)\nprint(iono_only.sample(\"satellite-1\").by_source())\nprint(scaled.source(\"ionospheric_delay\").scale)\n\nEach standard error source can be enabled, disabled, or scaled independently. Disabled sources still appear in by_source() with a zero-meter contribution, so lessons can compare one component at a time."),
             ("clock_error_source(...)", "receiver_clock = errors.clock_error_source(\n    \"receiver_clock\",\n    bias_seconds=35e-9,\n    jitter_seconds=4e-9,\n)\nprint(receiver_clock.bias_meters)\n\nClock errors are converted from seconds into equivalent range offsets using the speed of light by default."),
             ("apply_to_pseudorange(...)", "reading_with_error = model.apply_to_pseudorange(\n    reading.pseudorange_meters,\n    measurement_key=\"satellite-1\",\n)\n\nThis keeps the clean geometric and clock-biased measurement available while adding a reproducible total error for accuracy experiments."),
         ),

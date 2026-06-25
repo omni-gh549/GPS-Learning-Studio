@@ -102,6 +102,9 @@ class DocumentationTests(unittest.TestCase):
         self.assertIn("multipath", content.lower())
         self.assertIn("measurement noise", content.lower())
         self.assertIn("seed", content.lower())
+        self.assertIn("enabled", content.lower())
+        self.assertIn("disabled", content.lower())
+        self.assertIn("scaled", content.lower())
 
     def test_positioning_docs_explain_four_satellite_requirement(self) -> None:
         pages = {
