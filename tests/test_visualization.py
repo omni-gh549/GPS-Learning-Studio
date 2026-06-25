@@ -113,10 +113,37 @@ class VisualizationTests(unittest.TestCase):
         self.assertTrue(display.converged)
         self.assertIsNotNone(display.estimated_receiver_ecef)
         self.assertIsNotNone(display.estimated_clock_bias_seconds)
+        self.assertIsNotNone(display.max_abs_residual_meters)
+        self.assertIsNotNone(display.rms_residual_meters)
+        self.assertIsNotNone(display.horizontal_error_meters)
+        self.assertIsNotNone(display.vertical_error_meters)
         self.assertIsNotNone(display.position_error_meters)
-        self.assertLess(display.position_error_meters or 1.0, 0.001)
+        self.assertLess(display.position_error_meters if display.position_error_meters is not None else 1.0, 0.001)
+        self.assertLess(
+            abs(display.horizontal_error_meters)
+            if display.horizontal_error_meters is not None
+            else 1.0,
+            0.001,
+        )
+        self.assertLess(
+            abs(display.vertical_error_meters)
+            if display.vertical_error_meters is not None
+            else 1.0,
+            0.001,
+        )
         self.assertEqual(len(display.residuals_meters), 4)
-        self.assertLess(max(abs(residual) for residual in display.residuals_meters), 0.001)
+        self.assertLess(
+            display.max_abs_residual_meters
+            if display.max_abs_residual_meters is not None
+            else 1.0,
+            0.001,
+        )
+        self.assertLess(
+            display.rms_residual_meters
+            if display.rms_residual_meters is not None
+            else 1.0,
+            0.001,
+        )
 
     def test_builds_receiver_measurement_links_for_selected_station(self) -> None:
         station = GroundStation(0.0, 0.0, minimum_elevation_degrees=10.0)
@@ -157,6 +184,10 @@ class VisualizationTests(unittest.TestCase):
 
         self.assertFalse(display.converged)
         self.assertIsNone(display.estimated_receiver_ecef)
+        self.assertIsNone(display.max_abs_residual_meters)
+        self.assertIsNone(display.rms_residual_meters)
+        self.assertIsNone(display.horizontal_error_meters)
+        self.assertIsNone(display.vertical_error_meters)
         self.assertIsNone(display.position_error_meters)
         self.assertIn("at least four", display.diagnostic or "")
 

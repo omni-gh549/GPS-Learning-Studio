@@ -6,7 +6,13 @@ import math
 from dataclasses import dataclass
 from typing import Sequence
 
-from .coordinates import CartesianPosition
+from .coordinates import (
+    CartesianPosition,
+    LocalHorizonPosition,
+    ecef_to_local_horizon,
+    station_to_ecef,
+)
+from .ground_stations import GroundStation
 from .measurements import SPEED_OF_LIGHT_METERS_PER_SECOND
 
 
@@ -53,6 +59,36 @@ class PositionFix:
             raise ValueError("iterations must not be negative")
         for index, residual in enumerate(self.residuals_meters):
             _require_finite(f"residuals_meters[{index}]", residual)
+
+
+@dataclass(frozen=True)
+class PositionErrorReport:
+    """Residual and position-error metrics for a solved receiver fix."""
+
+    residuals_meters: tuple[float, ...]
+    max_abs_residual_meters: float
+    rms_residual_meters: float
+    local_error: LocalHorizonPosition
+    horizontal_error_meters: float
+    vertical_error_meters: float
+    position_error_meters: float
+
+    def __post_init__(self) -> None:
+        for index, residual in enumerate(self.residuals_meters):
+            _require_finite(f"residuals_meters[{index}]", residual)
+        _require_finite("max_abs_residual_meters", self.max_abs_residual_meters)
+        _require_finite("rms_residual_meters", self.rms_residual_meters)
+        _require_finite("horizontal_error_meters", self.horizontal_error_meters)
+        _require_finite("vertical_error_meters", self.vertical_error_meters)
+        _require_finite("position_error_meters", self.position_error_meters)
+        if self.max_abs_residual_meters < 0.0:
+            raise ValueError("max_abs_residual_meters must not be negative")
+        if self.rms_residual_meters < 0.0:
+            raise ValueError("rms_residual_meters must not be negative")
+        if self.horizontal_error_meters < 0.0:
+            raise ValueError("horizontal_error_meters must not be negative")
+        if self.position_error_meters < 0.0:
+            raise ValueError("position_error_meters must not be negative")
 
 
 def solve_position(
@@ -124,6 +160,48 @@ def solve_position(
     )
 
 
+def calculate_position_error(
+    fix: PositionFix,
+    true_receiver_ecef: CartesianPosition,
+    reference_station: GroundStation,
+) -> PositionErrorReport:
+    """Calculate residual, horizontal, vertical, and 3D errors for a fix.
+
+    The reference station defines the local east-north-up frame used to split
+    the ECEF position error into horizontal and vertical components.
+    """
+    dx = fix.receiver_ecef.x_meters - true_receiver_ecef.x_meters
+    dy = fix.receiver_ecef.y_meters - true_receiver_ecef.y_meters
+    dz = fix.receiver_ecef.z_meters - true_receiver_ecef.z_meters
+    position_error_meters = math.sqrt(dx * dx + dy * dy + dz * dz)
+    local_error = _ecef_delta_to_local_horizon(
+        CartesianPosition(dx, dy, dz),
+        reference_station,
+    )
+    horizontal_error_meters = math.hypot(
+        local_error.east_meters,
+        local_error.north_meters,
+    )
+    residuals = fix.residuals_meters
+    if residuals:
+        max_abs_residual_meters = max(abs(residual) for residual in residuals)
+        rms_residual_meters = math.sqrt(
+            sum(residual * residual for residual in residuals) / len(residuals)
+        )
+    else:
+        max_abs_residual_meters = 0.0
+        rms_residual_meters = 0.0
+    return PositionErrorReport(
+        residuals_meters=residuals,
+        max_abs_residual_meters=max_abs_residual_meters,
+        rms_residual_meters=rms_residual_meters,
+        local_error=local_error,
+        horizontal_error_meters=horizontal_error_meters,
+        vertical_error_meters=local_error.up_meters,
+        position_error_meters=position_error_meters,
+    )
+
+
 def _linearized_system(
     observations: Sequence[PseudorangeObservation],
     state: Sequence[float],
@@ -167,6 +245,19 @@ def _residuals(
         signal_speed_meters_per_second,
     )
     return tuple(residuals)
+
+
+def _ecef_delta_to_local_horizon(
+    delta: CartesianPosition,
+    reference_station: GroundStation,
+) -> LocalHorizonPosition:
+    origin = station_to_ecef(reference_station)
+    target = CartesianPosition(
+        origin.x_meters + delta.x_meters,
+        origin.y_meters + delta.y_meters,
+        origin.z_meters + delta.z_meters,
+    )
+    return ecef_to_local_horizon(target, reference_station)
 
 
 def _solve_least_squares(
@@ -216,7 +307,9 @@ def _solve_4x4(matrix: list[list[float]], rhs: list[float]) -> list[float]:
 
 
 __all__ = [
+    "PositionErrorReport",
     "PositionFix",
     "PseudorangeObservation",
+    "calculate_position_error",
     "solve_position",
 ]

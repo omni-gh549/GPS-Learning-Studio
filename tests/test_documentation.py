@@ -77,6 +77,10 @@ class DocumentationTests(unittest.TestCase):
         self.assertIn("gps_sim.positioning", content)
         self.assertIn("PseudorangeObservation", content)
         self.assertIn("solve_position", content)
+        self.assertIn("calculate_position_error", content)
+        self.assertIn("horizontal", content.lower())
+        self.assertIn("vertical", content.lower())
+        self.assertIn("3d", content.lower())
         self.assertIn("clock bias", content.lower())
 
     def test_errors_api_page_documents_seeded_error_sources(self) -> None:
@@ -174,6 +178,8 @@ class DocumentationTests(unittest.TestCase):
         )
 
         self.assertIn("Measurement links", content)
+        self.assertIn("horizontal error", content.lower())
+        self.assertIn("vertical error", content.lower())
         self.assertIn("pseudorange", content.lower())
         self.assertIn("Amber", content)
 

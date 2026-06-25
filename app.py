@@ -79,6 +79,7 @@ SIMULATOR_COMPLETIONS = (
     ("measurements.calculate_pseudorange(...)", "measurements.calculate_pseudorange(receiver_ecef, satellite_ecef)", "#7db6a6"),
     ("positioning.PseudorangeObservation(...)", "positioning.PseudorangeObservation(satellite_ecef, pseudorange_meters)", "#7db6a6"),
     ("positioning.solve_position(...)", "positioning.solve_position(observations)", "#7db6a6"),
+    ("positioning.calculate_position_error(...)", "positioning.calculate_position_error(fix, station_ecef, station)", "#7db6a6"),
     ("visibility.calculate_visibility(...)", "visibility.calculate_visibility(ecef, station)", "#7db6a6"),
     ("print(value)  e.g. print(\"Satellite state\")", "print()", "#c59bcf"),
     ("len(iterable)  e.g. len(states)", "len()", "#c59bcf"),
@@ -197,7 +198,8 @@ DOCUMENTATION_PAGES = (
             ("Import", "import gps_sim.positioning as positioning"),
             ("PseudorangeObservation(...)", "observation = positioning.PseudorangeObservation(\n    satellite_ecef=satellite_ecef,\n    pseudorange_meters=reading.pseudorange_meters,\n)\n\nEach observation pairs one satellite Earth-fixed position with the pseudorange measured by the receiver."),
             ("Why four satellites?", "A 3D GPS fix has four unknowns: receiver x, y, z, and receiver clock bias. Each pseudorange adds one distance equation, so three satellites can constrain position only if the receiver clock is already known. A fourth satellite gives the solver enough independent equations to estimate clock bias at the same time as position."),
-            ("solve_position(...)", "fix = positioning.solve_position(observations)\nprint(fix.receiver_ecef)\nprint(fix.receiver_clock_bias_seconds)\nprint(fix.residuals_meters)\n\nThe solver estimates x, y, z, and receiver clock bias together. A clear ValueError is raised when fewer than four satellites are supplied or the satellite geometry is singular. The visualizer uses this same API to compare the selected receiver's true and estimated Earth-fixed position."),
+            ("solve_position(...)", "fix = positioning.solve_position(observations)\nprint(fix.receiver_ecef)\nprint(fix.receiver_clock_bias_seconds)\nprint(fix.residuals_meters)\n\nThe solver estimates x, y, z, and receiver clock bias together. A clear ValueError is raised when fewer than four satellites are supplied or the satellite geometry is singular."),
+            ("calculate_position_error(...)", "report = positioning.calculate_position_error(\n    fix,\n    true_receiver_ecef=station_ecef,\n    reference_station=station,\n)\nprint(report.max_abs_residual_meters)\nprint(report.horizontal_error_meters)\nprint(report.vertical_error_meters)\nprint(report.position_error_meters)\n\nThe report keeps residual statistics and splits ECEF position error into local horizontal, vertical, and 3D components for accuracy experiments."),
         ),
     ),
     DocumentationPage(
@@ -231,7 +233,7 @@ DOCUMENTATION_PAGES = (
             ("Satellites", "Hover a satellite marker to display its Globalstar ID. Each colored marker follows its own inclined orbital plane."),
             ("Ground stations", "Orange markers show named stations. Click a front-facing marker to select it and inspect the live azimuth, elevation, range, and visibility table. Green dashed links connect stations to satellites at or above the elevation mask."),
             ("Measurement links", "Amber dashed links show the selected receiver's simplified pseudorange measurements to the satellites used by the position-fix display. Brighter amber means the satellite is above the station elevation mask; muted amber keeps below-mask observations visible for comparison."),
-            ("Position fix", "The selected station also drives a simulated pseudorange fix. The receiver panel compares the true station position with the estimated position, clock bias, maximum residual, and 3D error; a dashed yellow ring marks the estimated receiver on Earth."),
+            ("Position fix", "The selected station also drives a simulated pseudorange fix. The receiver panel compares the true station position with the estimated position, clock bias, residual statistics, horizontal error, vertical error, and 3D error; a dashed yellow ring marks the estimated receiver on Earth."),
             ("Time", "The four satellites use 113-116 minute orbital periods. Increase the orbital time scale to make changes easier to observe during a lesson."),
         ),
     ),
@@ -1202,7 +1204,7 @@ class EarthVisualizer(tk.Canvas):
         height = self.winfo_height()
         panel_width = min(360, max(264, width - 36))
         x1 = width - panel_width - 18
-        panel_height = 146 if position_fix.estimated_receiver_ecef is not None else 92
+        panel_height = 180 if position_fix.estimated_receiver_ecef is not None else 92
         if y1 + panel_height > height - 36:
             y1 = max(42, height - panel_height - 36)
         rounded_rectangle(
@@ -1246,11 +1248,15 @@ class EarthVisualizer(tk.Canvas):
 
         estimated = position_fix.estimated_receiver_ecef
         residuals = position_fix.residuals_meters
-        max_residual = max((abs(residual) for residual in residuals), default=0.0)
+        max_residual = position_fix.max_abs_residual_meters or 0.0
+        rms_residual = position_fix.rms_residual_meters or 0.0
+        horizontal_error = position_fix.horizontal_error_meters or 0.0
+        vertical_error = position_fix.vertical_error_meters or 0.0
         status = "CONVERGED" if position_fix.converged else "NOT CONVERGED"
         rows = (
             ("TRUE XYZ", self._format_ecef(position_fix.true_receiver_ecef)),
             ("EST XYZ", self._format_ecef(estimated)),
+            ("H/V ERROR", f"H {horizontal_error:.3f} m / V {vertical_error:.3f} m"),
             ("3D ERROR", f"{position_fix.position_error_meters or 0.0:.3f} m"),
             (
                 "CLOCK",
@@ -1259,7 +1265,8 @@ class EarthVisualizer(tk.Canvas):
                     f"est {(position_fix.estimated_clock_bias_seconds or 0.0) * 1_000_000:.3f} us"
                 ),
             ),
-            ("RESIDUALS", f"max {max_residual:.3f} m across {len(residuals)} sats"),
+            ("RESIDUALS", f"max {max_residual:.3f} m / rms {rms_residual:.3f} m"),
+            ("SAT COUNT", f"{len(residuals)} observations"),
             ("STATUS", status),
         )
         for index, (label, value) in enumerate(rows):

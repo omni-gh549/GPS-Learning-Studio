@@ -16,7 +16,11 @@ from .measurements import (
     SPEED_OF_LIGHT_METERS_PER_SECOND,
     calculate_pseudorange,
 )
-from .positioning import PseudorangeObservation, solve_position
+from .positioning import (
+    PseudorangeObservation,
+    calculate_position_error,
+    solve_position,
+)
 from .visibility import VisibilityResult, calculate_visibility
 
 
@@ -83,6 +87,10 @@ class ReceiverPositionFixDisplay:
     true_clock_bias_seconds: float
     estimated_clock_bias_seconds: float | None
     residuals_meters: tuple[float, ...]
+    max_abs_residual_meters: float | None
+    rms_residual_meters: float | None
+    horizontal_error_meters: float | None
+    vertical_error_meters: float | None
     position_error_meters: float | None
     converged: bool
     diagnostic: str | None = None
@@ -165,18 +173,31 @@ def build_receiver_position_fix_display(
             true_clock_bias_seconds=receiver_clock_bias_seconds,
             estimated_clock_bias_seconds=None,
             residuals_meters=(),
+            max_abs_residual_meters=None,
+            rms_residual_meters=None,
+            horizontal_error_meters=None,
+            vertical_error_meters=None,
             position_error_meters=None,
             converged=False,
             diagnostic=str(error),
         )
 
+    error_report = calculate_position_error(
+        fix,
+        true_receiver_ecef=scene.station_ecef,
+        reference_station=scene.station,
+    )
     return ReceiverPositionFixDisplay(
         true_receiver_ecef=scene.station_ecef,
         estimated_receiver_ecef=fix.receiver_ecef,
         true_clock_bias_seconds=receiver_clock_bias_seconds,
         estimated_clock_bias_seconds=fix.receiver_clock_bias_seconds,
-        residuals_meters=fix.residuals_meters,
-        position_error_meters=_cartesian_distance(scene.station_ecef, fix.receiver_ecef),
+        residuals_meters=error_report.residuals_meters,
+        max_abs_residual_meters=error_report.max_abs_residual_meters,
+        rms_residual_meters=error_report.rms_residual_meters,
+        horizontal_error_meters=error_report.horizontal_error_meters,
+        vertical_error_meters=error_report.vertical_error_meters,
+        position_error_meters=error_report.position_error_meters,
         converged=fix.converged,
     )
 
@@ -224,15 +245,6 @@ def build_ground_station_scenes(
         )
     return tuple(scenes)
 
-
-def _cartesian_distance(
-    first: CartesianPosition,
-    second: CartesianPosition,
-) -> float:
-    dx = first.x_meters - second.x_meters
-    dy = first.y_meters - second.y_meters
-    dz = first.z_meters - second.z_meters
-    return (dx * dx + dy * dy + dz * dz) ** 0.5
 
 
 __all__ = [

@@ -62,7 +62,7 @@ Visualizer controls:
 - Orange markers show named ground stations
 - Click a ground station to inspect its live azimuth, elevation, range, and visibility table
 - The selected station also displays a simulated receiver position fix with true
-  ECEF position, estimated ECEF position, residuals, clock bias, and 3D error
+  ECEF position, estimated ECEF position, residuals, clock bias, horizontal error, vertical error, and 3D error
 - Green dashed links show satellites above each station's elevation mask
 - Amber dashed links show the selected receiver's simplified pseudorange
   measurements, with brighter links for satellites above the elevation mask
@@ -143,7 +143,11 @@ observations = [
 ]
 if len(observations) >= 4:
     fix = positioning.solve_position(observations)
+    report = positioning.calculate_position_error(fix, station_ecef, station)
     print(fix.receiver_ecef, fix.receiver_clock_bias_seconds)
+    print(report.max_abs_residual_meters)
+    print(report.horizontal_error_meters, report.vertical_error_meters)
+    print(report.position_error_meters)
 ```
 
 `GroundStation` validates latitude, longitude, altitude, and elevation-mask
@@ -169,7 +173,8 @@ isolate one component without changing the other sampled offsets.
 The positioning module estimates receiver Earth-fixed x, y, z and receiver
 clock bias from four or more pseudorange observations. It uses a dependency-free
 iterative least-squares solver and raises clear diagnostics for insufficient or
-singular satellite geometry.
+singular satellite geometry. Its accuracy report calculates residual statistics
+and splits position error into local horizontal, vertical, and 3D components.
 Four satellites are normally required because the receiver must solve four
 unknowns at once: three Earth-fixed position coordinates plus receiver clock
 bias. Each pseudorange contributes one distance equation, so a fourth
@@ -182,7 +187,8 @@ the live table reports every satellite's look angles, range, and elevation-mask
 status using the same visibility results that drive the green links. The
 receiver fix panel uses the selected station as the true receiver, generates
 pseudoranges to the current constellation model, and reports the estimated
-position, residuals, receiver clock bias, and 3D position error. Amber dashed
+position, residuals, receiver clock bias, horizontal error, vertical error, and
+3D position error. Amber dashed
 measurement links connect the selected receiver to the satellites used by that
 pseudorange display, while muted amber keeps below-mask observations easy to
 compare with visible links.

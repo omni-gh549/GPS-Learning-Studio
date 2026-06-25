@@ -2,12 +2,22 @@ from __future__ import annotations
 
 import unittest
 
-from gps_sim.coordinates import CartesianPosition
+from gps_sim.coordinates import (
+    CartesianPosition,
+    LocalHorizonPosition,
+    local_horizon_to_ecef,
+)
+from gps_sim.ground_stations import GroundStation
 from gps_sim.measurements import (
     SPEED_OF_LIGHT_METERS_PER_SECOND,
     calculate_pseudorange,
 )
-from gps_sim.positioning import PseudorangeObservation, solve_position
+from gps_sim.positioning import (
+    PseudorangeObservation,
+    PositionFix,
+    calculate_position_error,
+    solve_position,
+)
 
 
 class PositioningTests(unittest.TestCase):
@@ -53,6 +63,36 @@ class PositioningTests(unittest.TestCase):
         self.assertAlmostEqual(fix.receiver_ecef.x_meters, receiver.x_meters, places=3)
         self.assertAlmostEqual(fix.receiver_ecef.y_meters, receiver.y_meters, places=3)
         self.assertAlmostEqual(fix.receiver_ecef.z_meters, receiver.z_meters, places=3)
+
+    def test_calculates_residual_and_position_error_breakdown(self) -> None:
+        station = GroundStation(45.0, -3.0, altitude_meters=120.0)
+        true_receiver = local_horizon_to_ecef(
+            LocalHorizonPosition(0.0, 0.0, 0.0),
+            station,
+        )
+        estimated_receiver = local_horizon_to_ecef(
+            LocalHorizonPosition(3.0, 4.0, -2.0),
+            station,
+        )
+        fix = PositionFix(
+            receiver_ecef=estimated_receiver,
+            receiver_clock_bias_seconds=0.0,
+            residuals_meters=(3.0, -4.0, 0.0),
+            iterations=4,
+            converged=True,
+        )
+
+        report = calculate_position_error(fix, true_receiver, station)
+
+        self.assertEqual(report.residuals_meters, (3.0, -4.0, 0.0))
+        self.assertAlmostEqual(report.max_abs_residual_meters, 4.0)
+        self.assertAlmostEqual(report.rms_residual_meters, (25.0 / 3.0) ** 0.5)
+        self.assertAlmostEqual(report.local_error.east_meters, 3.0, places=6)
+        self.assertAlmostEqual(report.local_error.north_meters, 4.0, places=6)
+        self.assertAlmostEqual(report.local_error.up_meters, -2.0, places=6)
+        self.assertAlmostEqual(report.horizontal_error_meters, 5.0, places=6)
+        self.assertAlmostEqual(report.vertical_error_meters, -2.0, places=6)
+        self.assertAlmostEqual(report.position_error_meters, 29.0 ** 0.5, places=6)
 
     def test_rejects_invalid_or_poor_geometry_inputs(self) -> None:
         satellite = CartesianPosition(20_200_000.0, 0.0, 0.0)
