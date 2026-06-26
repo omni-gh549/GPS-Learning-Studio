@@ -4,7 +4,10 @@ import unittest
 
 from gps_sim.ground_stations import GroundStation
 from gps_sim.visualization import (
+    AccuracyHistoryPoint,
     SatelliteSceneState,
+    append_accuracy_history_point,
+    build_accuracy_comparison_display,
     build_receiver_measurement_links,
     build_receiver_position_fix_display,
     build_ground_station_scenes,
@@ -190,6 +193,62 @@ class VisualizationTests(unittest.TestCase):
         self.assertIsNone(display.vertical_error_meters)
         self.assertIsNone(display.position_error_meters)
         self.assertIn("at least four", display.diagnostic or "")
+
+    def test_builds_before_after_accuracy_comparison(self) -> None:
+        station = GroundStation(0.0, 0.0, minimum_elevation_degrees=10.0)
+        satellites = (
+            SatelliteSceneState(1, 26_560_000.0, 0.0, 0.0, 0.0),
+            SatelliteSceneState(2, 26_560_000.0, 55.0, 90.0, 60.0),
+            SatelliteSceneState(3, 26_560_000.0, 55.0, 180.0, 130.0),
+            SatelliteSceneState(4, 26_560_000.0, 35.0, 270.0, 250.0),
+        )
+        scene = build_ground_station_scenes(
+            satellites,
+            {"Equator": station},
+            earth_rotation_degrees=0.0,
+        )[0]
+
+        comparison = build_accuracy_comparison_display(scene)
+
+        self.assertTrue(comparison.baseline.converged)
+        self.assertTrue(comparison.with_errors.converged)
+        self.assertEqual(comparison.error_model_seed, 42)
+        self.assertLess(comparison.baseline.position_error_meters or 1.0, 0.001)
+        self.assertGreater(comparison.with_errors.position_error_meters or 0.0, 0.1)
+        self.assertNotEqual(comparison.total_pseudorange_error_meters, 0.0)
+
+    def test_accuracy_history_is_bounded_and_preserves_error_samples(self) -> None:
+        station = GroundStation(0.0, 0.0, minimum_elevation_degrees=10.0)
+        satellites = (
+            SatelliteSceneState(1, 26_560_000.0, 0.0, 0.0, 0.0),
+            SatelliteSceneState(2, 26_560_000.0, 55.0, 90.0, 60.0),
+            SatelliteSceneState(3, 26_560_000.0, 55.0, 180.0, 130.0),
+            SatelliteSceneState(4, 26_560_000.0, 35.0, 270.0, 250.0),
+        )
+        scene = build_ground_station_scenes(
+            satellites,
+            {"Equator": station},
+            earth_rotation_degrees=0.0,
+        )[0]
+        comparison = build_accuracy_comparison_display(scene)
+
+        history: tuple[AccuracyHistoryPoint, ...] = ()
+        for index in range(4):
+            history = append_accuracy_history_point(
+                history,
+                elapsed_seconds=float(index),
+                comparison=comparison,
+                max_points=3,
+            )
+
+        self.assertEqual(len(history), 3)
+        self.assertEqual([point.elapsed_seconds for point in history], [1.0, 2.0, 3.0])
+        self.assertEqual(
+            history[-1].error_position_error_meters,
+            comparison.with_errors.position_error_meters,
+        )
+        with self.assertRaisesRegex(ValueError, "max_points"):
+            append_accuracy_history_point(history, 4.0, comparison, max_points=0)
 
 
 if __name__ == "__main__":

@@ -63,6 +63,8 @@ Visualizer controls:
 - Click a ground station to inspect its live azimuth, elevation, range, and visibility table
 - The selected station also displays a simulated receiver position fix with true
   ECEF position, estimated ECEF position, residuals, clock bias, horizontal error, vertical error, and 3D error
+- The accuracy comparison panel shows a clean before fix beside a seeded-error
+  after fix, with a rolling 3D position-error history plot
 - Green dashed links show satellites above each station's elevation mask
 - Amber dashed links show the selected receiver's simplified pseudorange
   measurements, with brighter links for satellites above the elevation mask
@@ -197,10 +199,12 @@ status using the same visibility results that drive the green links. The
 receiver fix panel uses the selected station as the true receiver, generates
 pseudoranges to the current constellation model, and reports the estimated
 position, residuals, receiver clock bias, horizontal error, vertical error, and
-3D position error. Amber dashed
-measurement links connect the selected receiver to the satellites used by that
-pseudorange display, while muted amber keeps below-mask observations easy to
-compare with visible links.
+3D position error. The accuracy comparison panel keeps the clean pseudorange
+solution visible as a before case, applies the deterministic classroom error
+model as the after case, and plots both 3D position errors over time. Amber
+dashed measurement links connect the selected receiver to the satellites used
+by that pseudorange display, while muted amber keeps below-mask observations
+easy to compare with visible links.
 
 Click the documentation icon in the left sidebar for descriptions of the
 simulator, editor, file controls, and every public simulator function. The

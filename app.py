@@ -25,11 +25,14 @@ from gps_sim.ground_stations import create_station, list_stations
 from gps_sim.runtime import bind_visualizer
 from gps_sim.updater import CURRENT_VERSION, download_and_install, find_update, is_packaged
 from gps_sim.visualization import (
+    AccuracyComparisonDisplay,
+    AccuracyHistoryPoint,
     GroundStationScene,
     ReceiverPositionFixDisplay,
     SatelliteSceneState,
+    append_accuracy_history_point,
+    build_accuracy_comparison_display,
     build_receiver_measurement_links,
-    build_receiver_position_fix_display,
     build_ground_station_scenes,
     build_station_visibility_rows,
 )
@@ -236,6 +239,7 @@ DOCUMENTATION_PAGES = (
             ("Ground stations", "Orange markers show named stations. Click a front-facing marker to select it and inspect the live azimuth, elevation, range, and visibility table. Green dashed links connect stations to satellites at or above the elevation mask."),
             ("Measurement links", "Amber dashed links show the selected receiver's simplified pseudorange measurements to the satellites used by the position-fix display. Brighter amber means the satellite is above the station elevation mask; muted amber keeps below-mask observations visible for comparison."),
             ("Position fix", "The selected station also drives a simulated pseudorange fix. The receiver panel compares the true station position with the estimated position, clock bias, residual statistics, horizontal error, vertical error, and 3D error; a dashed yellow ring marks the estimated receiver on Earth."),
+            ("Accuracy comparison", "The accuracy panel compares a clean before fix with an after fix that applies the seeded classroom error model, then plots both 3D position errors over time so students can see the error source change the solution."),
             ("Time", "The four satellites use 113-116 minute orbital periods. Increase the orbital time scale to make changes easier to observe during a lesson."),
         ),
     ),
@@ -703,6 +707,8 @@ class EarthVisualizer(tk.Canvas):
         self.running = True
         self.projected_satellites: list[tuple[float, float, Satellite]] = []
         self.projected_stations: list[tuple[float, float, str]] = []
+        self.accuracy_history: tuple[AccuracyHistoryPoint, ...] = ()
+        self.accuracy_history_station: str | None = None
         self.hovered_id: int | None = None
         self.selected_station_name: str | None = None
         self.camera_dragged = False
@@ -734,6 +740,8 @@ class EarthVisualizer(tk.Canvas):
         self.camera_pitch = math.radians(18)
         self.orbit_speed = 1.0
         self.earth_speed = 1.0
+        self.accuracy_history = ()
+        self.accuracy_history_station = None
 
     def satellite_data(self) -> list[dict[str, float | int]]:
         elapsed = time.perf_counter() - self.start_time
@@ -998,10 +1006,20 @@ class EarthVisualizer(tk.Canvas):
             )
 
         if selected_station_scene is not None:
-            position_fix = build_receiver_position_fix_display(selected_station_scene)
+            comparison = build_accuracy_comparison_display(selected_station_scene)
+            position_fix = comparison.baseline
+            if self.accuracy_history_station != selected_station_scene.name:
+                self.accuracy_history = ()
+                self.accuracy_history_station = selected_station_scene.name
+            self.accuracy_history = append_accuracy_history_point(
+                self.accuracy_history,
+                elapsed_seconds=elapsed,
+                comparison=comparison,
+            )
             self._draw_estimated_receiver_marker(position_fix, radius)
             next_panel_y = self._draw_visibility_table(selected_station_scene)
-            self._draw_position_fix_panel(position_fix, next_panel_y)
+            next_panel_y = self._draw_position_fix_panel(position_fix, next_panel_y)
+            self._draw_accuracy_panel(comparison, self.accuracy_history, next_panel_y)
 
         self.create_text(18, 18, text="ORBITAL VIEW", anchor="nw", fill=MUTED,
                          font=("Segoe UI", 9, "bold"))
@@ -1201,7 +1219,7 @@ class EarthVisualizer(tk.Canvas):
         self,
         position_fix: ReceiverPositionFixDisplay,
         y1: float,
-    ) -> None:
+    ) -> float:
         width = self.winfo_width()
         height = self.winfo_height()
         panel_width = min(360, max(264, width - 36))
@@ -1246,7 +1264,7 @@ class EarthVisualizer(tk.Canvas):
                 anchor="nw",
                 width=panel_width - 24,
             )
-            return
+            return y1 + panel_height + 12
 
         estimated = position_fix.estimated_receiver_ecef
         residuals = position_fix.residuals_meters
@@ -1289,6 +1307,174 @@ class EarthVisualizer(tk.Canvas):
                 font=("Cascadia Mono", 8),
                 anchor="nw",
             )
+        return y1 + panel_height + 12
+
+    def _draw_accuracy_panel(
+        self,
+        comparison: AccuracyComparisonDisplay,
+        history: tuple[AccuracyHistoryPoint, ...],
+        y1: float,
+    ) -> None:
+        width = self.winfo_width()
+        height = self.winfo_height()
+        panel_width = min(360, max(264, width - 36))
+        panel_height = 162
+        x1 = width - panel_width - 18
+        if y1 + panel_height > height - 36:
+            x1 = 18
+            y1 = max(42, height - panel_height - 36)
+        rounded_rectangle(
+            self,
+            x1,
+            y1,
+            x1 + panel_width,
+            y1 + panel_height,
+            9,
+            fill="#25292c",
+            outline=BORDER,
+            width=1,
+        )
+        self.create_text(
+            x1 + 12,
+            y1 + 12,
+            text="ACCURACY COMPARISON",
+            fill=TEXT,
+            font=("Segoe UI", 9, "bold"),
+            anchor="nw",
+        )
+        self.create_text(
+            x1 + panel_width - 12,
+            y1 + 12,
+            text=f"SEED {comparison.error_model_seed}",
+            fill=MUTED,
+            font=("Segoe UI", 8),
+            anchor="ne",
+        )
+        clean_error = comparison.baseline.position_error_meters
+        modeled_error = comparison.with_errors.position_error_meters
+        rows = (
+            ("BEFORE", "clean pseudoranges", clean_error, VISIBLE_LINK),
+            ("AFTER", "seeded errors", modeled_error, MEASUREMENT_LINK),
+        )
+        for index, (label, note, value, color) in enumerate(rows):
+            row_y = y1 + 40 + index * 22
+            self.create_text(
+                x1 + 12,
+                row_y,
+                text=label,
+                fill=MUTED,
+                font=("Segoe UI", 7, "bold"),
+                anchor="nw",
+            )
+            self.create_text(
+                x1 + 74,
+                row_y,
+                text=note,
+                fill=TEXT,
+                font=("Segoe UI", 8),
+                anchor="nw",
+            )
+            self.create_text(
+                x1 + panel_width - 12,
+                row_y,
+                text=self._format_error_value(value),
+                fill=color,
+                font=("Cascadia Mono", 8),
+                anchor="ne",
+            )
+
+        plot_x1 = x1 + 12
+        plot_y1 = y1 + 91
+        plot_x2 = x1 + panel_width - 12
+        plot_y2 = y1 + panel_height - 18
+        self.create_rectangle(
+            plot_x1,
+            plot_y1,
+            plot_x2,
+            plot_y2,
+            fill="#202326",
+            outline=BORDER,
+            width=1,
+        )
+        self.create_text(
+            plot_x1,
+            plot_y1 - 8,
+            text="3D ERROR HISTORY",
+            fill=MUTED,
+            font=("Segoe UI", 7, "bold"),
+            anchor="sw",
+        )
+        values = [
+            value
+            for point in history
+            for value in (
+                point.baseline_position_error_meters,
+                point.error_position_error_meters,
+            )
+            if value is not None
+        ]
+        max_value = max(values, default=1.0)
+        max_value = max(1.0, max_value)
+        self._draw_history_line(
+            history,
+            "baseline_position_error_meters",
+            plot_x1,
+            plot_y1,
+            plot_x2,
+            plot_y2,
+            max_value,
+            VISIBLE_LINK,
+        )
+        self._draw_history_line(
+            history,
+            "error_position_error_meters",
+            plot_x1,
+            plot_y1,
+            plot_x2,
+            plot_y2,
+            max_value,
+            MEASUREMENT_LINK,
+        )
+        self.create_text(
+            plot_x2,
+            plot_y1 - 8,
+            text=f"max {max_value:.1f} m",
+            fill=MUTED,
+            font=("Cascadia Mono", 7),
+            anchor="se",
+        )
+
+    def _draw_history_line(
+        self,
+        history: tuple[AccuracyHistoryPoint, ...],
+        attribute: str,
+        x1: float,
+        y1: float,
+        x2: float,
+        y2: float,
+        max_value: float,
+        color: str,
+    ) -> None:
+        points = [
+            (index, getattr(point, attribute))
+            for index, point in enumerate(history)
+            if getattr(point, attribute) is not None
+        ]
+        if len(points) < 2:
+            return
+        denominator = max(1, len(history) - 1)
+        coordinates: list[float] = []
+        for index, value in points:
+            x = x1 + (x2 - x1) * index / denominator
+            y = y2 - (y2 - y1) * min(float(value) / max_value, 1.0)
+            coordinates.extend((x, y))
+        self.create_line(*coordinates, fill=color, width=1.8, smooth=True)
+
+    @staticmethod
+    def _format_error_value(value: float | None) -> str:
+        if value is None:
+            return "unavailable"
+        return f"{value:.3f} m"
 
     @staticmethod
     def _format_ecef(position: CartesianPosition) -> str:

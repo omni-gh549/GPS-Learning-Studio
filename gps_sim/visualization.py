@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Iterable, Mapping
 
@@ -11,6 +12,7 @@ from .coordinates import (
     orbital_to_eci,
     station_to_ecef,
 )
+from .errors import MeasurementErrorModel, classroom_error_model
 from .ground_stations import GroundStation
 from .measurements import (
     SPEED_OF_LIGHT_METERS_PER_SECOND,
@@ -96,6 +98,49 @@ class ReceiverPositionFixDisplay:
     diagnostic: str | None = None
 
 
+@dataclass(frozen=True)
+class AccuracyComparisonDisplay:
+    """Before/after receiver fixes for a repeatable accuracy experiment."""
+
+    baseline: ReceiverPositionFixDisplay
+    with_errors: ReceiverPositionFixDisplay
+    error_model_seed: int
+    total_pseudorange_error_meters: float
+
+
+@dataclass(frozen=True)
+class AccuracyHistoryPoint:
+    """One sampled point for the visualizer's position-error history plot."""
+
+    elapsed_seconds: float
+    baseline_position_error_meters: float | None
+    error_position_error_meters: float | None
+
+    def __post_init__(self) -> None:
+        _require_finite("elapsed_seconds", self.elapsed_seconds)
+        if self.elapsed_seconds < 0.0:
+            raise ValueError("elapsed_seconds must not be negative")
+        if self.baseline_position_error_meters is not None:
+            _require_finite(
+                "baseline_position_error_meters",
+                self.baseline_position_error_meters,
+            )
+            if self.baseline_position_error_meters < 0.0:
+                raise ValueError("baseline_position_error_meters must not be negative")
+        if self.error_position_error_meters is not None:
+            _require_finite(
+                "error_position_error_meters",
+                self.error_position_error_meters,
+            )
+            if self.error_position_error_meters < 0.0:
+                raise ValueError("error_position_error_meters must not be negative")
+
+
+def _require_finite(name: str, value: float) -> None:
+    if not math.isfinite(value):
+        raise ValueError(f"{name} must be finite")
+
+
 def build_station_visibility_rows(
     scene: GroundStationScene,
 ) -> tuple[StationVisibilityRow, ...]:
@@ -143,6 +188,7 @@ def build_receiver_position_fix_display(
     scene: GroundStationScene,
     receiver_clock_bias_seconds: float = 0.000_001,
     signal_speed_meters_per_second: float = SPEED_OF_LIGHT_METERS_PER_SECOND,
+    error_model: MeasurementErrorModel | None = None,
 ) -> ReceiverPositionFixDisplay:
     """Build display-ready receiver true/estimated state from scene links."""
     observations = []
@@ -153,10 +199,16 @@ def build_receiver_position_fix_display(
             receiver_clock_bias_seconds=receiver_clock_bias_seconds,
             signal_speed_meters_per_second=signal_speed_meters_per_second,
         )
+        pseudorange_meters = reading.pseudorange_meters
+        if error_model is not None:
+            pseudorange_meters = error_model.apply_to_pseudorange(
+                pseudorange_meters,
+                measurement_key=f"{scene.name}-G{link.satellite_id}",
+            )
         observations.append(
             PseudorangeObservation(
                 satellite_ecef=link.satellite_ecef,
-                pseudorange_meters=reading.pseudorange_meters,
+                pseudorange_meters=pseudorange_meters,
             )
         )
 
@@ -200,6 +252,54 @@ def build_receiver_position_fix_display(
         position_error_meters=error_report.position_error_meters,
         converged=fix.converged,
     )
+
+
+def build_accuracy_comparison_display(
+    scene: GroundStationScene,
+    receiver_clock_bias_seconds: float = 0.000_001,
+    error_model: MeasurementErrorModel | None = None,
+    signal_speed_meters_per_second: float = SPEED_OF_LIGHT_METERS_PER_SECOND,
+) -> AccuracyComparisonDisplay:
+    """Compare a clean position fix with one using a deterministic error model."""
+    model = error_model or classroom_error_model(seed=42)
+    baseline = build_receiver_position_fix_display(
+        scene,
+        receiver_clock_bias_seconds=receiver_clock_bias_seconds,
+        signal_speed_meters_per_second=signal_speed_meters_per_second,
+    )
+    with_errors = build_receiver_position_fix_display(
+        scene,
+        receiver_clock_bias_seconds=receiver_clock_bias_seconds,
+        signal_speed_meters_per_second=signal_speed_meters_per_second,
+        error_model=model,
+    )
+    total_pseudorange_error_meters = sum(
+        model.sample(f"{scene.name}-G{link.satellite_id}").total_meters
+        for link in scene.satellite_links
+    )
+    return AccuracyComparisonDisplay(
+        baseline=baseline,
+        with_errors=with_errors,
+        error_model_seed=model.seed,
+        total_pseudorange_error_meters=total_pseudorange_error_meters,
+    )
+
+
+def append_accuracy_history_point(
+    history: tuple[AccuracyHistoryPoint, ...],
+    elapsed_seconds: float,
+    comparison: AccuracyComparisonDisplay,
+    max_points: int = 80,
+) -> tuple[AccuracyHistoryPoint, ...]:
+    """Return a bounded time series with the latest comparison sample appended."""
+    if max_points <= 0:
+        raise ValueError("max_points must be greater than zero")
+    point = AccuracyHistoryPoint(
+        elapsed_seconds=elapsed_seconds,
+        baseline_position_error_meters=comparison.baseline.position_error_meters,
+        error_position_error_meters=comparison.with_errors.position_error_meters,
+    )
+    return (history + (point,))[-max_points:]
 
 
 def build_ground_station_scenes(
@@ -249,11 +349,15 @@ def build_ground_station_scenes(
 
 __all__ = [
     "GroundStationScene",
+    "AccuracyComparisonDisplay",
+    "AccuracyHistoryPoint",
     "ReceiverMeasurementLink",
     "ReceiverPositionFixDisplay",
     "SatelliteLink",
     "SatelliteSceneState",
     "StationVisibilityRow",
+    "append_accuracy_history_point",
+    "build_accuracy_comparison_display",
     "build_receiver_measurement_links",
     "build_receiver_position_fix_display",
     "build_ground_station_scenes",

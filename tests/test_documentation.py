@@ -186,6 +186,9 @@ class DocumentationTests(unittest.TestCase):
         self.assertIn("horizontal error", content.lower())
         self.assertIn("vertical error", content.lower())
         self.assertIn("pseudorange", content.lower())
+        self.assertIn("before", content.lower())
+        self.assertIn("after", content.lower())
+        self.assertIn("over time", content.lower())
         self.assertIn("Amber", content)
 
 
