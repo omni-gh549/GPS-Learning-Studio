@@ -384,10 +384,79 @@ DOCUMENTATION_PAGES = (
     ),
     DocumentationPage(
         "Error and accuracy",
-        "COMING SOON",
-        "Explore timing error, atmospheric delay, multipath, and dilution of precision.",
-        (("Planned page", "This lesson will turn common GPS error sources on and off, then compare their effect on the calculated position."),),
-        placeholder=True,
+        "25 MINUTE LESSON",
+        "Run controlled experiments that isolate GPS error sources and satellite geometry.",
+        (
+            (
+                "Learning objectives",
+                "Distinguish measurement error from poor satellite geometry, isolate one pseudorange error source at a time, interpret residuals, and compare horizontal, vertical, 3D, and DOP accuracy metrics.",
+            ),
+            (
+                "1. Build a clean reference fix",
+                "Start each accuracy experiment with a noise-free set of pseudoranges. The clean fix is the control case, so any later change can be traced to the error model or the satellite geometry you changed.\n\n"
+                "from gps_sim.coordinates import CartesianPosition\n"
+                "import gps_sim.measurements as measurements\n"
+                "import gps_sim.positioning as positioning\n\n"
+                "receiver = CartesianPosition(1_000_000.0, -2_000_000.0, 3_000_000.0)\n"
+                "satellites = [\n"
+                "    CartesianPosition(20_200_000.0, 0.0, 0.0),\n"
+                "    CartesianPosition(0.0, 21_200_000.0, 1_000_000.0),\n"
+                "    CartesianPosition(1_500_000.0, 0.0, 22_200_000.0),\n"
+                "    CartesianPosition(-20_500_000.0, -8_000_000.0, 12_000_000.0),\n"
+                "    CartesianPosition(18_000_000.0, 16_000_000.0, -8_000_000.0),\n"
+                "]\n"
+                "clean_observations = []\n"
+                "for satellite in satellites:\n"
+                "    reading = measurements.calculate_pseudorange(receiver, satellite)\n"
+                "    clean_observations.append(positioning.PseudorangeObservation(satellite, reading.pseudorange_meters))\n"
+                "clean_fix = positioning.solve_position(clean_observations)\n"
+                "print(round(max(abs(value) for value in clean_fix.residuals_meters), 6))",
+            ),
+            (
+                "2. Add one source at a time",
+                "A controlled measurement experiment keeps the same receiver, satellites, seed, and solver settings while changing one error source. Disable every source except the one under test, then compare the solved position and residuals with the clean control.\n\n"
+                "import gps_sim.errors as errors\n\n"
+                "source_under_test = \"ionospheric_delay\"\n"
+                "model = errors.classroom_error_model(seed=42)\n"
+                "for source_name in errors.ERROR_SOURCE_NAMES:\n"
+                "    model = model.with_source_settings(source_name, enabled=(source_name == source_under_test))\n\n"
+                "error_observations = []\n"
+                "for index, satellite in enumerate(satellites):\n"
+                "    reading = measurements.calculate_pseudorange(receiver, satellite)\n"
+                "    pseudorange = model.apply_to_pseudorange(reading.pseudorange_meters, f\"satellite-{index}\")\n"
+                "    error_observations.append(positioning.PseudorangeObservation(satellite, pseudorange))\n"
+                "error_fix = positioning.solve_position(error_observations)\n"
+                "for residual in error_fix.residuals_meters:\n"
+                "    print(round(residual, 3))",
+            ),
+            (
+                "3. Read the accuracy report",
+                "Residuals show how well the measurements agree with the solved receiver. Position error shows how far the solution moved from the known truth. A low residual can still hide a biased position when every pseudorange was shifted in a similar way.",
+            ),
+            (
+                "4. Separate error from geometry",
+                "DOP metrics describe satellite placement, not measurement quality. Reuse the same pseudoranges with two satellite layouts: a spread-out layout should have lower GDOP, PDOP, HDOP, and VDOP than a clustered layout. If geometry is poor, small measurement errors can create a large position error.",
+            ),
+            (
+                "Guided lab",
+                "Run the one-source experiment for ionospheric_delay, multipath, and measurement_noise. Keep seed=42 for every run, record the maximum absolute residual, then change only the scale for the active source and observe how the error grows.\n\n"
+                "for scale in (0.0, 1.0, 2.0):\n"
+                "    scaled_model = model.with_source_settings(source_under_test, scale=scale)\n"
+                "    print(source_under_test, scale, scaled_model.sample(\"satellite-0\").by_source())",
+            ),
+            (
+                "Coding challenge",
+                "Write a script that loops over every name in ERROR_SOURCE_NAMES. For each run, enable only that source, solve the receiver position, and print the source name, maximum residual, and 3D position error.",
+            ),
+            (
+                "Success check",
+                "Your code should use classroom_error_model, ERROR_SOURCE_NAMES, with_source_settings, apply_to_pseudorange, PseudorangeObservation, solve_position, and calculate_position_error. The same seed and satellite keys should reproduce the same table on repeated runs.",
+            ),
+            (
+                "Stretch goal",
+                "Create a poor-geometry satellite list by moving satellites close together, calculate GDOP, PDOP, HDOP, and VDOP, then rerun the same measurement-noise experiment. Explain why geometry can amplify the same pseudorange noise into a larger horizontal or vertical error.",
+            ),
+        ),
     ),
 )
 

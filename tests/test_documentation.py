@@ -169,6 +169,48 @@ class DocumentationTests(unittest.TestCase):
         self.assertIn("PseudorangeObservation", lesson_text)
         self.assertIn("solve_position", lesson_text)
 
+    def test_error_accuracy_page_is_a_complete_controlled_experiment_lesson(self) -> None:
+        page = next(
+            page for page in DOCUMENTATION_PAGES if page.title == "Error and accuracy"
+        )
+        content = "\n".join(
+            (page.title, page.eyebrow, page.summary)
+            + tuple(
+                text
+                for section in page.sections
+                for text in section
+            )
+        )
+
+        self.assertFalse(page.placeholder)
+        self.assertIn("Learning objectives", content)
+        self.assertIn("controlled", content.lower())
+        self.assertIn("measurement error", content.lower())
+        self.assertIn("poor satellite geometry", content.lower())
+        self.assertIn("residual", content.lower())
+        self.assertIn("horizontal", content.lower())
+        self.assertIn("vertical", content.lower())
+        self.assertIn("3D", content)
+        self.assertIn("DOP", content)
+
+    def test_error_accuracy_lesson_includes_experiment_challenge_path(self) -> None:
+        page = next(
+            page for page in DOCUMENTATION_PAGES if page.title == "Error and accuracy"
+        )
+        sections = dict(page.sections)
+        lesson_text = "\n".join(sections.values())
+
+        self.assertIn("Coding challenge", sections)
+        self.assertIn("Success check", sections)
+        self.assertIn("Stretch goal", sections)
+        self.assertIn("classroom_error_model", lesson_text)
+        self.assertIn("ERROR_SOURCE_NAMES", lesson_text)
+        self.assertIn("with_source_settings", lesson_text)
+        self.assertIn("apply_to_pseudorange", lesson_text)
+        self.assertIn("PseudorangeObservation", lesson_text)
+        self.assertIn("solve_position", lesson_text)
+        self.assertIn("calculate_position_error", lesson_text)
+
     def test_orbital_view_documents_measurement_links(self) -> None:
         page = next(
             page for page in DOCUMENTATION_PAGES if page.title == "Orbital view"

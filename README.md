@@ -214,3 +214,6 @@ challenge.
 The Position fixes lesson is a worked trilateration lab covering pseudorange
 generation, receiver clock bias, solver setup, residual checks, and a solver
 challenge.
+The Error and accuracy lesson is a controlled-experiments lab covering seeded
+measurement errors, one-source-at-a-time comparisons, residuals, horizontal and
+vertical position error, 3D error, DOP, and an accuracy challenge.

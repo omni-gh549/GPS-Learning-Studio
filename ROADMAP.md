@@ -80,7 +80,7 @@ source.
 - [x] Calculate residuals, horizontal error, vertical error, and 3D position error.
 - [x] Calculate satellite geometry metrics including GDOP, PDOP, HDOP, and VDOP.
 - [x] Add a before/after comparison view and time-series error plot.
-- [ ] Replace the Error and accuracy placeholder with controlled experiments.
+- [x] Replace the Error and accuracy placeholder with controlled experiments.
 
 ### Acceptance criteria
 
