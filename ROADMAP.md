@@ -98,7 +98,7 @@ reference.
 
 ### Features
 
-- [ ] Add lesson objectives, prerequisites, estimated duration, and completion
+- [x] Add lesson objectives, prerequisites, estimated duration, and completion
   state.
 - [ ] Add runnable code snippets that can be inserted into the editor.
 - [ ] Add lightweight checks for challenges and show focused feedback.

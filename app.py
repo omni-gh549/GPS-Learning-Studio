@@ -104,6 +104,13 @@ class DocumentationPage:
     summary: str
     sections: tuple[tuple[str, str], ...]
     placeholder: bool = False
+    objectives: tuple[str, ...] = ()
+    prerequisites: tuple[str, ...] = ()
+    estimated_duration_minutes: int | None = None
+
+    @property
+    def is_lesson(self) -> bool:
+        return self.estimated_duration_minutes is not None
 
 
 DOCUMENTATION_PAGES = (
@@ -126,6 +133,13 @@ DOCUMENTATION_PAGES = (
             ("2. Change time", "import gps_sim.dynamics as dynamics\n\ndynamics.set_orbital_time_scale(20.0)"),
             ("3. Reset", "dynamics.reset_simulation()\n\nReset restores both time scales and returns the camera to its starting angle."),
         ),
+        objectives=(
+            "Run the starter script from the editor.",
+            "Inspect live constellation telemetry.",
+            "Change the simulation time scale and reset it.",
+        ),
+        prerequisites=("No Python experience required.",),
+        estimated_duration_minutes=5,
     ),
     DocumentationPage(
         "Constellation API",
@@ -311,6 +325,18 @@ DOCUMENTATION_PAGES = (
                 "Print each visible satellite's azimuth, elevation, and range in kilometres. Run the script repeatedly and note when a satellite rises above or sets below the 20-degree mask.",
             ),
         ),
+        objectives=(
+            "Create a receiver from latitude, longitude, altitude, and elevation mask.",
+            "Convert satellite coordinates into the station horizon frame.",
+            "Interpret azimuth, elevation, range, and pass visibility.",
+        ),
+        prerequisites=(
+            "Quick start",
+            "Ground stations API",
+            "Coordinates API",
+            "Visibility API",
+        ),
+        estimated_duration_minutes=15,
     ),
     DocumentationPage(
         "Position fixes",
@@ -381,6 +407,17 @@ DOCUMENTATION_PAGES = (
                 "Move one satellite close to another and rerun the solver. If the geometry becomes singular or poorly conditioned, catch the ValueError and explain why satellite placement matters as much as the number of satellites.",
             ),
         ),
+        objectives=(
+            "Generate noise-free pseudoranges from known satellite positions.",
+            "Solve receiver x, y, z, and clock bias from four observations.",
+            "Use residuals to check whether the measurements agree.",
+        ),
+        prerequisites=(
+            "Quick start",
+            "Measurements API",
+            "Positioning API",
+        ),
+        estimated_duration_minutes=20,
     ),
     DocumentationPage(
         "Error and accuracy",
@@ -457,6 +494,17 @@ DOCUMENTATION_PAGES = (
                 "Create a poor-geometry satellite list by moving satellites close together, calculate GDOP, PDOP, HDOP, and VDOP, then rerun the same measurement-noise experiment. Explain why geometry can amplify the same pseudorange noise into a larger horizontal or vertical error.",
             ),
         ),
+        objectives=(
+            "Run clean control fixes and seeded error experiments.",
+            "Isolate one pseudorange error source at a time.",
+            "Compare residuals, position error, and DOP geometry metrics.",
+        ),
+        prerequisites=(
+            "Position fixes",
+            "Errors API",
+            "Positioning API",
+        ),
+        estimated_duration_minutes=25,
     ),
 )
 
@@ -615,6 +663,17 @@ class DarkScrollbar(tk.Canvas):
         self.command("moveto", fraction)
 
 
+def documentation_page_marker(
+    page: DocumentationPage,
+    completed_pages: set[str] | frozenset[str],
+) -> str:
+    if page.placeholder:
+        return "+ "
+    if page.title in completed_pages:
+        return "[x] "
+    return "[ ] "
+
+
 class DocumentationPanel(tk.Frame):
     def __init__(self, master: tk.Misc, close_command):
         super().__init__(master, bg=PANEL, width=390)
@@ -622,6 +681,7 @@ class DocumentationPanel(tk.Frame):
         self.grid_rowconfigure(2, weight=1)
         self.grid_columnconfigure(0, weight=1)
         self.current_page = 0
+        self.completed_pages: set[str] = set()
 
         header = tk.Frame(self, bg=PANEL)
         header.grid(row=0, column=0, sticky="ew", padx=18, pady=(18, 10))
@@ -666,10 +726,21 @@ class DocumentationPanel(tk.Frame):
             font=("Segoe UI", 9), exportselection=False,
         )
         self.page_list.grid(row=0, column=0, rowspan=2, sticky="ns", padx=(0, 12))
-        for page in DOCUMENTATION_PAGES:
-            marker = "  " if not page.placeholder else "+ "
-            self.page_list.insert("end", marker + page.title)
+        self._refresh_page_list()
         self.page_list.bind("<<ListboxSelect>>", self._select_page)
+
+        self.lesson_meta = tk.Frame(body_frame, bg=PANEL)
+        self.lesson_meta.grid(row=0, column=1, columnspan=2, sticky="ew", pady=(0, 10))
+        self.lesson_meta.grid_columnconfigure(0, weight=1)
+        self.lesson_status = tk.Label(
+            self.lesson_meta, bg=PANEL, fg=MUTED, font=("Segoe UI", 8), anchor="w",
+        )
+        self.lesson_status.grid(row=0, column=0, sticky="ew")
+        self.completion_button = RoundedButton(
+            self.lesson_meta, "Mark complete", self._toggle_completion,
+            width=104, height=27,
+        )
+        self.completion_button.grid(row=0, column=1, sticky="e", padx=(8, 0))
 
         self.body = tk.Text(
             body_frame, bg=PANEL, fg=TEXT, relief="flat", bd=0,
@@ -707,6 +778,26 @@ class DocumentationPanel(tk.Frame):
         )
         self.show_page(0)
 
+    def _page_marker(self, page: DocumentationPage) -> str:
+        return documentation_page_marker(page, self.completed_pages)
+
+    def _refresh_page_list(self) -> None:
+        selection = self.current_page
+        self.page_list.delete(0, "end")
+        for page in DOCUMENTATION_PAGES:
+            self.page_list.insert("end", self._page_marker(page) + page.title)
+        self.page_list.selection_set(selection)
+        self.page_list.activate(selection)
+
+    def _toggle_completion(self) -> None:
+        page = DOCUMENTATION_PAGES[self.current_page]
+        if page.title in self.completed_pages:
+            self.completed_pages.remove(page.title)
+        else:
+            self.completed_pages.add(page.title)
+        self._refresh_page_list()
+        self.show_page(self.current_page)
+
     def _select_page(self, _event: tk.Event) -> None:
         selection = self.page_list.curselection()
         if selection:
@@ -716,17 +807,38 @@ class DocumentationPanel(tk.Frame):
         index = max(0, min(len(DOCUMENTATION_PAGES) - 1, index))
         self.current_page = index
         page = DOCUMENTATION_PAGES[index]
+        self._refresh_page_list()
         self.page_list.selection_clear(0, "end")
         self.page_list.selection_set(index)
         self.page_list.activate(index)
         self.page_list.see(index)
         self.page_status.configure(text=f"{index + 1} / {len(DOCUMENTATION_PAGES)}")
+        completed = page.title in self.completed_pages
+        state_text = "Complete" if completed else "Incomplete"
+        duration_text = (
+            f"{page.estimated_duration_minutes} min"
+            if page.estimated_duration_minutes is not None
+            else "Reference"
+        )
+        self.lesson_status.configure(text=f"{state_text} - {duration_text}")
+        self.completion_button.label = "Mark incomplete" if completed else "Mark complete"
+        self.completion_button._draw()
 
         self.body.configure(state="normal")
         self.body.delete("1.0", "end")
         self.body.insert("end", page.eyebrow + "\n", "eyebrow")
         self.body.insert("end", page.title + "\n", "title")
         self.body.insert("end", page.summary + "\n", "summary")
+        if page.is_lesson:
+            self.body.insert("end", "Estimated duration\n", "heading")
+            self.body.insert("end", f"{page.estimated_duration_minutes} minutes\n\n", "body")
+            self.body.insert("end", "Prerequisites\n", "heading")
+            for prerequisite in page.prerequisites:
+                self.body.insert("end", f"- {prerequisite}\n", "body")
+            self.body.insert("end", "\nLearning objectives\n", "heading")
+            for objective in page.objectives:
+                self.body.insert("end", f"- {objective}\n", "body")
+            self.body.insert("end", "\n", "body")
         for heading, content in page.sections:
             self.body.insert("end", heading + "\n", "heading")
             for line in content.splitlines():

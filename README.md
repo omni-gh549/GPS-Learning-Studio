@@ -7,7 +7,8 @@ A dependency-free Python desktop application with:
 - A syntax-highlighted Python editor
 - Named simulator modules with explicit imports
 - Function suggestions and autocomplete
-- Multi-page in-app documentation with lessons, API references, and coding challenges
+- Multi-page in-app documentation with lesson objectives, prerequisites,
+  completion state, API references, and coding challenges
 - Open, save, and run controls
 
 See [ROADMAP.md](ROADMAP.md) for the prioritized feature plan.
@@ -207,7 +208,10 @@ by that pseudorange display, while muted amber keeps below-mask observations
 easy to compare with visible links.
 
 Click the documentation icon in the left sidebar for descriptions of the
-simulator, editor, file controls, and every public simulator function. The
+simulator, editor, file controls, and every public simulator function. Lesson
+pages show estimated duration, prerequisites, objectives, and a session
+completion toggle so a student can track what they have finished while the app
+is open. The
 Ground stations lesson is a guided 15-minute lab covering latitude/longitude,
 look angles, elevation masks, pass visibility, and an editor-ready coding
 challenge.

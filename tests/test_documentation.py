@@ -2,10 +2,30 @@ from __future__ import annotations
 
 import unittest
 
-from app import DOCUMENTATION_PAGES
+from app import DOCUMENTATION_PAGES, documentation_page_marker
 
 
 class DocumentationTests(unittest.TestCase):
+    def test_lesson_pages_have_learning_metadata(self) -> None:
+        lessons = [page for page in DOCUMENTATION_PAGES if page.is_lesson]
+
+        self.assertGreaterEqual(len(lessons), 4)
+        for page in lessons:
+            with self.subTest(page=page.title):
+                self.assertGreater(page.estimated_duration_minutes or 0, 0)
+                self.assertGreaterEqual(len(page.objectives), 2)
+                self.assertGreaterEqual(len(page.prerequisites), 1)
+                self.assertTrue(all(objective.strip() for objective in page.objectives))
+                self.assertTrue(
+                    all(prerequisite.strip() for prerequisite in page.prerequisites)
+                )
+
+    def test_documentation_completion_markers_are_headless(self) -> None:
+        page = next(page for page in DOCUMENTATION_PAGES if page.title == "Quick start")
+
+        self.assertEqual("[ ] ", documentation_page_marker(page, set()))
+        self.assertEqual("[x] ", documentation_page_marker(page, {"Quick start"}))
+
     def test_ground_station_page_is_a_complete_guided_lesson(self) -> None:
         page = next(
             page for page in DOCUMENTATION_PAGES if page.title == "Ground stations"
