@@ -98,6 +98,12 @@ SIMULATOR_COMPLETIONS = (
 )
 
 @dataclass(frozen=True)
+class DocumentationSnippet:
+    title: str
+    code: str
+
+
+@dataclass(frozen=True)
 class DocumentationPage:
     title: str
     eyebrow: str
@@ -107,6 +113,7 @@ class DocumentationPage:
     objectives: tuple[str, ...] = ()
     prerequisites: tuple[str, ...] = ()
     estimated_duration_minutes: int | None = None
+    snippets: tuple[DocumentationSnippet, ...] = ()
 
     @property
     def is_lesson(self) -> bool:
@@ -140,6 +147,23 @@ DOCUMENTATION_PAGES = (
         ),
         prerequisites=("No Python experience required.",),
         estimated_duration_minutes=5,
+        snippets=(
+            DocumentationSnippet(
+                "Read constellation telemetry",
+                "import gps_sim.constellation as constellation\n\n"
+                "print(\"Satellite orbital angles:\")\n"
+                "for satellite in constellation.get_satellite_states():\n"
+                "    print(satellite[\"id\"], round(satellite[\"orbital_angle_degrees\"], 2))\n",
+            ),
+            DocumentationSnippet(
+                "Speed up then reset",
+                "import gps_sim.dynamics as dynamics\n\n"
+                "dynamics.set_orbital_time_scale(20.0)\n"
+                "print(\"Orbital time scale set to 20x\")\n"
+                "dynamics.reset_simulation()\n"
+                "print(\"Simulation reset\")\n",
+            ),
+        ),
     ),
     DocumentationPage(
         "Constellation API",
@@ -337,6 +361,34 @@ DOCUMENTATION_PAGES = (
             "Visibility API",
         ),
         estimated_duration_minutes=15,
+        snippets=(
+            DocumentationSnippet(
+                "Find visible satellites",
+                "import gps_sim.constellation as constellation\n"
+                "import gps_sim.coordinates as coordinates\n"
+                "import gps_sim.ground_stations as ground_stations\n"
+                "import gps_sim.visibility as visibility\n\n"
+                "station = ground_stations.GroundStation(\n"
+                "    latitude_degrees=0.0,\n"
+                "    longitude_degrees=0.0,\n"
+                "    altitude_meters=0.0,\n"
+                "    minimum_elevation_degrees=20.0,\n"
+                ")\n\n"
+                "visible_ids = []\n"
+                "for satellite in constellation.get_satellite_states():\n"
+                "    eci = coordinates.orbital_to_eci(\n"
+                "        26_560_000.0,\n"
+                "        satellite[\"inclination_degrees\"],\n"
+                "        satellite[\"longitude_of_ascending_node_degrees\"],\n"
+                "        satellite[\"orbital_angle_degrees\"],\n"
+                "    )\n"
+                "    ecef = coordinates.eci_to_ecef(eci, earth_rotation_degrees=0.0)\n"
+                "    look = visibility.calculate_visibility(ecef, station)\n"
+                "    if look.is_visible:\n"
+                "        visible_ids.append(satellite[\"id\"])\n\n"
+                "print(\"Visible above 20 degrees:\", visible_ids)\n",
+            ),
+        ),
     ),
     DocumentationPage(
         "Position fixes",
@@ -418,6 +470,36 @@ DOCUMENTATION_PAGES = (
             "Positioning API",
         ),
         estimated_duration_minutes=20,
+        snippets=(
+            DocumentationSnippet(
+                "Solve a clean four-satellite fix",
+                "from gps_sim.coordinates import CartesianPosition\n"
+                "import gps_sim.measurements as measurements\n"
+                "import gps_sim.positioning as positioning\n\n"
+                "receiver = CartesianPosition(1_000_000.0, -2_000_000.0, 3_000_000.0)\n"
+                "satellites = [\n"
+                "    CartesianPosition(20_200_000.0, 0.0, 0.0),\n"
+                "    CartesianPosition(0.0, 21_200_000.0, 1_000_000.0),\n"
+                "    CartesianPosition(1_500_000.0, 0.0, 22_200_000.0),\n"
+                "    CartesianPosition(-20_500_000.0, -8_000_000.0, 12_000_000.0),\n"
+                "]\n\n"
+                "observations = []\n"
+                "for satellite in satellites:\n"
+                "    reading = measurements.calculate_pseudorange(\n"
+                "        receiver,\n"
+                "        satellite,\n"
+                "        receiver_clock_bias_seconds=0.0000015,\n"
+                "    )\n"
+                "    observations.append(positioning.PseudorangeObservation(\n"
+                "        satellite_ecef=satellite,\n"
+                "        pseudorange_meters=reading.pseudorange_meters,\n"
+                "    ))\n\n"
+                "fix = positioning.solve_position(observations)\n"
+                "print(fix.converged, fix.iterations)\n"
+                "print(round(fix.receiver_ecef.x_meters - receiver.x_meters, 6))\n"
+                "print(round(fix.receiver_clock_bias_seconds, 10))\n",
+            ),
+        ),
     ),
     DocumentationPage(
         "Error and accuracy",
@@ -505,6 +587,41 @@ DOCUMENTATION_PAGES = (
             "Positioning API",
         ),
         estimated_duration_minutes=25,
+        snippets=(
+            DocumentationSnippet(
+                "Compare one error source",
+                "from gps_sim.coordinates import CartesianPosition\n"
+                "import gps_sim.errors as errors\n"
+                "import gps_sim.measurements as measurements\n"
+                "import gps_sim.positioning as positioning\n\n"
+                "receiver = CartesianPosition(1_000_000.0, -2_000_000.0, 3_000_000.0)\n"
+                "satellites = [\n"
+                "    CartesianPosition(20_200_000.0, 0.0, 0.0),\n"
+                "    CartesianPosition(0.0, 21_200_000.0, 1_000_000.0),\n"
+                "    CartesianPosition(1_500_000.0, 0.0, 22_200_000.0),\n"
+                "    CartesianPosition(-20_500_000.0, -8_000_000.0, 12_000_000.0),\n"
+                "    CartesianPosition(18_000_000.0, 16_000_000.0, -8_000_000.0),\n"
+                "]\n"
+                "source_under_test = \"ionospheric_delay\"\n"
+                "model = errors.classroom_error_model(seed=42)\n"
+                "for source_name in errors.ERROR_SOURCE_NAMES:\n"
+                "    model = model.with_source_settings(\n"
+                "        source_name,\n"
+                "        enabled=(source_name == source_under_test),\n"
+                "    )\n\n"
+                "observations = []\n"
+                "for index, satellite in enumerate(satellites):\n"
+                "    reading = measurements.calculate_pseudorange(receiver, satellite)\n"
+                "    pseudorange = model.apply_to_pseudorange(\n"
+                "        reading.pseudorange_meters,\n"
+                "        f\"satellite-{index}\",\n"
+                "    )\n"
+                "    observations.append(positioning.PseudorangeObservation(satellite, pseudorange))\n\n"
+                "fix = positioning.solve_position(observations)\n"
+                "print(source_under_test)\n"
+                "print(round(max(abs(value) for value in fix.residuals_meters), 3))\n",
+            ),
+        ),
     ),
 )
 
@@ -675,13 +792,15 @@ def documentation_page_marker(
 
 
 class DocumentationPanel(tk.Frame):
-    def __init__(self, master: tk.Misc, close_command):
+    def __init__(self, master: tk.Misc, close_command, insert_snippet_command=None):
         super().__init__(master, bg=PANEL, width=390)
         self.grid_propagate(False)
         self.grid_rowconfigure(2, weight=1)
         self.grid_columnconfigure(0, weight=1)
         self.current_page = 0
         self.completed_pages: set[str] = set()
+        self.insert_snippet_command = insert_snippet_command
+        self.snippet_buttons: list[tk.Widget] = []
 
         header = tk.Frame(self, bg=PANEL)
         header.grid(row=0, column=0, sticky="ew", padx=18, pady=(18, 10))
@@ -825,6 +944,9 @@ class DocumentationPanel(tk.Frame):
         self.completion_button._draw()
 
         self.body.configure(state="normal")
+        for button in self.snippet_buttons:
+            button.destroy()
+        self.snippet_buttons.clear()
         self.body.delete("1.0", "end")
         self.body.insert("end", page.eyebrow + "\n", "eyebrow")
         self.body.insert("end", page.title + "\n", "title")
@@ -839,6 +961,24 @@ class DocumentationPanel(tk.Frame):
             for objective in page.objectives:
                 self.body.insert("end", f"- {objective}\n", "body")
             self.body.insert("end", "\n", "body")
+        if page.snippets:
+            self.body.insert("end", "Runnable snippets\n", "heading")
+            for snippet in page.snippets:
+                self.body.insert("end", snippet.title + "\n", "body")
+                if self.insert_snippet_command is not None:
+                    button = RoundedButton(
+                        self.body,
+                        "Insert snippet",
+                        lambda snippet=snippet: self.insert_snippet_command(snippet),
+                        width=102,
+                        height=27,
+                    )
+                    self.snippet_buttons.append(button)
+                    self.body.window_create("end", window=button)
+                    self.body.insert("end", "\n", "body")
+                for line in snippet.code.rstrip().splitlines():
+                    self.body.insert("end", line + "\n", "code")
+                self.body.insert("end", "\n", "body")
         for heading, content in page.sections:
             self.body.insert("end", heading + "\n", "heading")
             for line in content.splitlines():
@@ -1971,7 +2111,9 @@ class OrbitStudio(tk.Tk):
         )
         self.workspace_split.grid(row=0, column=1, sticky="nsew")
         self.documentation_panel = DocumentationPanel(
-            self.workspace_split, self.toggle_documentation
+            self.workspace_split,
+            self.toggle_documentation,
+            self.insert_documentation_snippet,
         )
         self.documentation_open = False
 
@@ -2183,6 +2325,18 @@ class OrbitStudio(tk.Tk):
             messagebox.showerror("Invalid module", "Enter a valid dotted Python module name.")
             return
         self.editor.insert("insert", f"import {module}\n")
+        self.editor.focus_set()
+
+    def insert_documentation_snippet(self, snippet: DocumentationSnippet) -> None:
+        code = snippet.code.strip("\n")
+        if self.editor.tag_ranges("sel"):
+            self.editor.delete("sel.first", "sel.last")
+        elif self.editor.compare("insert", ">", "1.0"):
+            before_cursor = self.editor.get("insert-2c", "insert")
+            if before_cursor and not before_cursor.endswith("\n\n"):
+                self.editor.insert("insert", "\n" if before_cursor.endswith("\n") else "\n\n")
+        self.editor.insert("insert", code + "\n")
+        self.highlighter.highlight()
         self.editor.focus_set()
 
     def open_script(self) -> None:

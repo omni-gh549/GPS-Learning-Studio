@@ -26,6 +26,24 @@ class DocumentationTests(unittest.TestCase):
         self.assertEqual("[ ] ", documentation_page_marker(page, set()))
         self.assertEqual("[x] ", documentation_page_marker(page, {"Quick start"}))
 
+    def test_lesson_pages_include_runnable_editor_snippets(self) -> None:
+        lesson_titles = {
+            "Quick start",
+            "Ground stations",
+            "Position fixes",
+            "Error and accuracy",
+        }
+        lessons = [page for page in DOCUMENTATION_PAGES if page.title in lesson_titles]
+
+        self.assertEqual(lesson_titles, {page.title for page in lessons})
+        for page in lessons:
+            with self.subTest(page=page.title):
+                self.assertGreaterEqual(len(page.snippets), 1)
+                for snippet in page.snippets:
+                    self.assertTrue(snippet.title.strip())
+                    self.assertIn("import ", snippet.code)
+                    compile(snippet.code, f"<documentation snippet: {page.title}>", "exec")
+
     def test_ground_station_page_is_a_complete_guided_lesson(self) -> None:
         page = next(
             page for page in DOCUMENTATION_PAGES if page.title == "Ground stations"

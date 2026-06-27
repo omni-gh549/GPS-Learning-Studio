@@ -100,7 +100,7 @@ reference.
 
 - [x] Add lesson objectives, prerequisites, estimated duration, and completion
   state.
-- [ ] Add runnable code snippets that can be inserted into the editor.
+- [x] Add runnable code snippets that can be inserted into the editor.
 - [ ] Add lightweight checks for challenges and show focused feedback.
 - [ ] Save progress, completed challenges, and the last open lesson locally.
 - [ ] Add a reset-progress option and sample solution reveal.
