@@ -3,8 +3,10 @@ from __future__ import annotations
 import builtins
 import contextlib
 import io
+import json
 import keyword
 import math
+import os
 import queue
 import random
 import re
@@ -51,6 +53,7 @@ STATION = "#ef8f72"
 VISIBLE_LINK = "#86d5b4"
 MEASUREMENT_LINK = "#d6cc75"
 SATELLITE_ORBIT_RADIUS_METERS = WGS84_SEMI_MAJOR_AXIS_METERS * 1.58
+PROGRESS_SCHEMA_VERSION = 1
 
 SIMULATOR_COMPLETIONS = (
     ("import gps_sim.constellation as constellation", "import gps_sim.constellation as constellation", "#8eb6d8"),
@@ -122,6 +125,13 @@ class ChallengeFeedback:
 
 
 @dataclass(frozen=True)
+class DocumentationProgress:
+    completed_pages: frozenset[str] = frozenset()
+    completed_challenges: frozenset[str] = frozenset()
+    last_open_lesson: str | None = None
+
+
+@dataclass(frozen=True)
 class DocumentationPage:
     title: str
     eyebrow: str
@@ -137,6 +147,75 @@ class DocumentationPage:
     @property
     def is_lesson(self) -> bool:
         return self.estimated_duration_minutes is not None
+
+
+def default_documentation_progress_path() -> Path:
+    local_app_data = os.environ.get("LOCALAPPDATA")
+    if local_app_data:
+        return Path(local_app_data) / "GPS Learning Studio" / "documentation-progress.json"
+    return Path.home() / ".gps-learning-studio" / "documentation-progress.json"
+
+
+def _valid_documentation_titles() -> set[str]:
+    return {page.title for page in DOCUMENTATION_PAGES}
+
+
+def _valid_challenge_titles() -> set[str]:
+    return {page.title for page in DOCUMENTATION_PAGES if page.challenge_check is not None}
+
+
+def _valid_lesson_titles() -> set[str]:
+    return {page.title for page in DOCUMENTATION_PAGES if page.is_lesson}
+
+
+def load_documentation_progress(path: Path | None = None) -> DocumentationProgress:
+    progress_path = path or default_documentation_progress_path()
+    try:
+        raw = json.loads(progress_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return DocumentationProgress()
+    if not isinstance(raw, dict):
+        return DocumentationProgress()
+
+    valid_titles = _valid_documentation_titles()
+    valid_challenges = _valid_challenge_titles()
+    valid_lessons = _valid_lesson_titles()
+    completed_pages = frozenset(
+        title
+        for title in raw.get("completed_pages", ())
+        if isinstance(title, str) and title in valid_titles
+    )
+    completed_challenges = frozenset(
+        title
+        for title in raw.get("completed_challenges", ())
+        if isinstance(title, str) and title in valid_challenges
+    )
+    last_open_lesson = raw.get("last_open_lesson")
+    if not isinstance(last_open_lesson, str) or last_open_lesson not in valid_lessons:
+        last_open_lesson = None
+    return DocumentationProgress(
+        completed_pages=completed_pages,
+        completed_challenges=completed_challenges,
+        last_open_lesson=last_open_lesson,
+    )
+
+
+def save_documentation_progress(
+    progress: DocumentationProgress,
+    path: Path | None = None,
+) -> None:
+    progress_path = path or default_documentation_progress_path()
+    payload = {
+        "schema_version": PROGRESS_SCHEMA_VERSION,
+        "completed_pages": sorted(progress.completed_pages),
+        "completed_challenges": sorted(progress.completed_challenges),
+        "last_open_lesson": progress.last_open_lesson,
+    }
+    progress_path.parent.mkdir(parents=True, exist_ok=True)
+    progress_path.write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
 
 
 def evaluate_documentation_challenge(
@@ -875,15 +954,21 @@ class DocumentationPanel(tk.Frame):
         close_command,
         insert_snippet_command=None,
         check_challenge_command=None,
+        progress: DocumentationProgress | None = None,
+        save_progress_command=None,
     ):
         super().__init__(master, bg=PANEL, width=390)
         self.grid_propagate(False)
         self.grid_rowconfigure(2, weight=1)
         self.grid_columnconfigure(0, weight=1)
-        self.current_page = 0
-        self.completed_pages: set[str] = set()
+        progress = progress or DocumentationProgress()
+        self.current_page = self._initial_page_index(progress.last_open_lesson)
+        self.completed_pages: set[str] = set(progress.completed_pages)
+        self.completed_challenges: set[str] = set(progress.completed_challenges)
+        self.last_open_lesson = progress.last_open_lesson
         self.insert_snippet_command = insert_snippet_command
         self.check_challenge_command = check_challenge_command
+        self.save_progress_command = save_progress_command
         self.snippet_buttons: list[tk.Widget] = []
 
         header = tk.Frame(self, bg=PANEL)
@@ -984,7 +1069,25 @@ class DocumentationPanel(tk.Frame):
             font=("Cascadia Mono", 9), lmargin1=7, lmargin2=7,
             rmargin=7, spacing1=4, spacing3=4,
         )
-        self.show_page(0)
+        self.show_page(self.current_page)
+
+    def _initial_page_index(self, last_open_lesson: str | None) -> int:
+        if last_open_lesson:
+            for index, page in enumerate(DOCUMENTATION_PAGES):
+                if page.title == last_open_lesson:
+                    return index
+        return 0
+
+    def _save_progress(self) -> None:
+        if self.save_progress_command is None:
+            return
+        self.save_progress_command(
+            DocumentationProgress(
+                completed_pages=frozenset(self.completed_pages),
+                completed_challenges=frozenset(self.completed_challenges),
+                last_open_lesson=self.last_open_lesson,
+            )
+        )
 
     def _page_marker(self, page: DocumentationPage) -> str:
         return documentation_page_marker(page, self.completed_pages)
@@ -1003,6 +1106,7 @@ class DocumentationPanel(tk.Frame):
             self.completed_pages.remove(page.title)
         else:
             self.completed_pages.add(page.title)
+        self._save_progress()
         self._refresh_page_list()
         self.show_page(self.current_page)
 
@@ -1010,6 +1114,13 @@ class DocumentationPanel(tk.Frame):
         if self.check_challenge_command is None:
             return
         self.check_challenge_command(DOCUMENTATION_PAGES[self.current_page])
+
+    def mark_challenge_completed(self, page: DocumentationPage) -> None:
+        if page.challenge_check is None:
+            return
+        self.completed_challenges.add(page.title)
+        self._save_progress()
+        self.show_page(self.current_page)
 
     def _select_page(self, _event: tk.Event) -> None:
         selection = self.page_list.curselection()
@@ -1020,6 +1131,9 @@ class DocumentationPanel(tk.Frame):
         index = max(0, min(len(DOCUMENTATION_PAGES) - 1, index))
         self.current_page = index
         page = DOCUMENTATION_PAGES[index]
+        if page.is_lesson:
+            self.last_open_lesson = page.title
+            self._save_progress()
         self._refresh_page_list()
         self.page_list.selection_clear(0, "end")
         self.page_list.selection_set(index)
@@ -1033,7 +1147,12 @@ class DocumentationPanel(tk.Frame):
             if page.estimated_duration_minutes is not None
             else "Reference"
         )
-        self.lesson_status.configure(text=f"{state_text} - {duration_text}")
+        challenge_text = (
+            " - Challenge complete"
+            if page.title in self.completed_challenges
+            else ""
+        )
+        self.lesson_status.configure(text=f"{state_text} - {duration_text}{challenge_text}")
         self.completion_button.label = "Mark incomplete" if completed else "Mark complete"
         self.completion_button._draw()
         if page.challenge_check is not None and self.check_challenge_command is not None:
@@ -2163,6 +2282,10 @@ class OrbitStudio(tk.Tk):
         self.current_file: Path | None = None
         self.execution_namespace: dict[str, object] = {"__name__": "__main__"}
         self.output_queue: queue.Queue[str] = queue.Queue()
+        self.documentation_progress_path = default_documentation_progress_path()
+        self.documentation_progress = load_documentation_progress(
+            self.documentation_progress_path
+        )
         self._match_windows_titlebar()
         if not list_stations():
             create_station(
@@ -2213,6 +2336,8 @@ class OrbitStudio(tk.Tk):
             self.toggle_documentation,
             self.insert_documentation_snippet,
             self.check_documentation_challenge,
+            self.documentation_progress,
+            self.save_documentation_progress,
         )
         self.documentation_open = False
 
@@ -2445,7 +2570,16 @@ class OrbitStudio(tk.Tk):
         lines = [f"Challenge check: {page.title}", status]
         lines.extend(f"- {message}" for message in feedback.messages)
         self._set_output("\n".join(lines) + "\n")
+        if feedback.passed:
+            self.documentation_panel.mark_challenge_completed(page)
         self.editor.focus_set()
+
+    def save_documentation_progress(self, progress: DocumentationProgress) -> None:
+        self.documentation_progress = progress
+        try:
+            save_documentation_progress(progress, self.documentation_progress_path)
+        except OSError as error:
+            self._set_output(f"Could not save lesson progress: {error}\n")
 
     def open_script(self) -> None:
         filename = filedialog.askopenfilename(

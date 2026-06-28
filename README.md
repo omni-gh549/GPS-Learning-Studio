@@ -8,7 +8,7 @@ A dependency-free Python desktop application with:
 - Named simulator modules with explicit imports
 - Function suggestions and autocomplete
 - Multi-page in-app documentation with lesson objectives, prerequisites,
-  completion state, runnable snippets, API references, and coding challenges
+  saved completion state, runnable snippets, API references, and coding challenges
 - Open, save, and run controls
 
 See [ROADMAP.md](ROADMAP.md) for the prioritized feature plan.
@@ -214,11 +214,13 @@ easy to compare with visible links.
 Click the documentation icon in the left sidebar for descriptions of the
 simulator, editor, file controls, and every public simulator function. Lesson
 pages show estimated duration, prerequisites, objectives, and a session
-completion toggle so a student can track what they have finished while the app
-is open. Lesson pages also provide runnable snippets that insert directly into
-the editor, giving each lab a ready-to-run starting point. Challenge pages add
-a Check challenge action that catches syntax errors and missing required APIs
-before the student compares the script output with the lesson success check. The
+completion toggle so a student can track what they have finished across app
+restarts. The app saves completed lessons, passed challenge checks, and the last
+open lesson to local application data. Lesson pages also provide runnable
+snippets that insert directly into the editor, giving each lab a ready-to-run
+starting point. Challenge pages add a Check challenge action that catches syntax
+errors and missing required APIs before the student compares the script output
+with the lesson success check. The
 Ground stations lesson is a guided 15-minute lab covering latitude/longitude,
 look angles, elevation masks, pass visibility, and an editor-ready coding
 challenge.

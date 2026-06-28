@@ -1,11 +1,16 @@
 from __future__ import annotations
 
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from app import (
     DOCUMENTATION_PAGES,
+    DocumentationProgress,
     documentation_page_marker,
     evaluate_documentation_challenge,
+    load_documentation_progress,
+    save_documentation_progress,
 )
 
 
@@ -29,6 +34,38 @@ class DocumentationTests(unittest.TestCase):
 
         self.assertEqual("[ ] ", documentation_page_marker(page, set()))
         self.assertEqual("[x] ", documentation_page_marker(page, {"Quick start"}))
+
+    def test_documentation_progress_round_trips_locally(self) -> None:
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "progress.json"
+            progress = DocumentationProgress(
+                completed_pages=frozenset({"Quick start", "Ground stations"}),
+                completed_challenges=frozenset({"Ground stations"}),
+                last_open_lesson="Ground stations",
+            )
+
+            save_documentation_progress(progress, path)
+            loaded = load_documentation_progress(path)
+
+        self.assertEqual(progress, loaded)
+
+    def test_documentation_progress_ignores_unknown_or_invalid_entries(self) -> None:
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "progress.json"
+            path.write_text(
+                "{\n"
+                "  \"completed_pages\": [\"Quick start\", \"Ghost lesson\"],\n"
+                "  \"completed_challenges\": [\"Position fixes\", \"Welcome\"],\n"
+                "  \"last_open_lesson\": \"Welcome\"\n"
+                "}\n",
+                encoding="utf-8",
+            )
+
+            progress = load_documentation_progress(path)
+
+        self.assertEqual(frozenset({"Quick start"}), progress.completed_pages)
+        self.assertEqual(frozenset({"Position fixes"}), progress.completed_challenges)
+        self.assertIsNone(progress.last_open_lesson)
 
     def test_lesson_pages_include_runnable_editor_snippets(self) -> None:
         lesson_titles = {
