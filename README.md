@@ -56,6 +56,9 @@ Editor shortcuts:
 - `Ctrl+O`: open script
 - Function suggestions appear automatically as you type
 - Lesson pages include runnable snippets that can be inserted into the editor
+- Challenge lesson pages include a lightweight checker that reviews the editor
+  script for syntax and the key APIs needed by the exercise, then reports
+  focused feedback in the output pane
 
 Visualizer controls:
 
@@ -213,7 +216,9 @@ simulator, editor, file controls, and every public simulator function. Lesson
 pages show estimated duration, prerequisites, objectives, and a session
 completion toggle so a student can track what they have finished while the app
 is open. Lesson pages also provide runnable snippets that insert directly into
-the editor, giving each lab a ready-to-run starting point. The
+the editor, giving each lab a ready-to-run starting point. Challenge pages add
+a Check challenge action that catches syntax errors and missing required APIs
+before the student compares the script output with the lesson success check. The
 Ground stations lesson is a guided 15-minute lab covering latitude/longitude,
 look angles, elevation masks, pass visibility, and an editor-ready coding
 challenge.

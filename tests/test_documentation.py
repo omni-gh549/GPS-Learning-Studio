@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import unittest
 
-from app import DOCUMENTATION_PAGES, documentation_page_marker
+from app import (
+    DOCUMENTATION_PAGES,
+    documentation_page_marker,
+    evaluate_documentation_challenge,
+)
 
 
 class DocumentationTests(unittest.TestCase):
@@ -43,6 +47,70 @@ class DocumentationTests(unittest.TestCase):
                     self.assertTrue(snippet.title.strip())
                     self.assertIn("import ", snippet.code)
                     compile(snippet.code, f"<documentation snippet: {page.title}>", "exec")
+
+    def test_challenge_pages_define_lightweight_checks(self) -> None:
+        challenge_pages = [
+            page
+            for page in DOCUMENTATION_PAGES
+            if "Coding challenge" in dict(page.sections)
+        ]
+
+        self.assertGreaterEqual(len(challenge_pages), 3)
+        for page in challenge_pages:
+            with self.subTest(page=page.title):
+                self.assertIsNotNone(page.challenge_check)
+                self.assertGreaterEqual(len(page.challenge_check.requirements), 4)
+
+    def test_documentation_challenge_check_reports_missing_focus_items(self) -> None:
+        page = next(
+            page for page in DOCUMENTATION_PAGES if page.title == "Ground stations"
+        )
+
+        feedback = evaluate_documentation_challenge(
+            page,
+            "import gps_sim.ground_stations as ground_stations\n"
+            "station = ground_stations.GroundStation(0.0, 0.0)\n"
+            "print(station)\n",
+        )
+
+        self.assertFalse(feedback.passed)
+        self.assertTrue(any("orbital_to_eci" in message for message in feedback.messages))
+        self.assertTrue(any("calculate_visibility" in message for message in feedback.messages))
+
+    def test_documentation_challenge_check_accepts_expected_structure(self) -> None:
+        page = next(
+            page for page in DOCUMENTATION_PAGES if page.title == "Error and accuracy"
+        )
+        source = (
+            "from gps_sim.coordinates import CartesianPosition\n"
+            "import gps_sim.errors as errors\n"
+            "import gps_sim.measurements as measurements\n"
+            "import gps_sim.positioning as positioning\n"
+            "receiver = CartesianPosition(1.0, 2.0, 3.0)\n"
+            "for source_name in errors.ERROR_SOURCE_NAMES:\n"
+            "    model = errors.classroom_error_model(seed=42)\n"
+            "    model = model.with_source_settings(source_name, enabled=True)\n"
+            "    pseudorange = model.apply_to_pseudorange(10.0, source_name)\n"
+            "    observation = positioning.PseudorangeObservation(receiver, pseudorange)\n"
+            "    fix = positioning.solve_position([observation, observation, observation, observation])\n"
+            "    report = positioning.calculate_position_error(fix, receiver, None)\n"
+            "    print(source_name, report.position_error_meters)\n"
+        )
+
+        feedback = evaluate_documentation_challenge(page, source)
+
+        self.assertTrue(feedback.passed)
+
+    def test_documentation_challenge_check_reports_syntax_first(self) -> None:
+        page = next(
+            page for page in DOCUMENTATION_PAGES if page.title == "Position fixes"
+        )
+
+        feedback = evaluate_documentation_challenge(page, "for\n")
+
+        self.assertFalse(feedback.passed)
+        self.assertEqual(1, len(feedback.messages))
+        self.assertIn("syntax", feedback.messages[0].lower())
 
     def test_ground_station_page_is_a_complete_guided_lesson(self) -> None:
         page = next(

@@ -104,6 +104,24 @@ class DocumentationSnippet:
 
 
 @dataclass(frozen=True)
+class ChallengeRequirement:
+    label: str
+    tokens: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class DocumentationChallengeCheck:
+    success_message: str
+    requirements: tuple[ChallengeRequirement, ...]
+
+
+@dataclass(frozen=True)
+class ChallengeFeedback:
+    passed: bool
+    messages: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class DocumentationPage:
     title: str
     eyebrow: str
@@ -114,10 +132,37 @@ class DocumentationPage:
     prerequisites: tuple[str, ...] = ()
     estimated_duration_minutes: int | None = None
     snippets: tuple[DocumentationSnippet, ...] = ()
+    challenge_check: DocumentationChallengeCheck | None = None
 
     @property
     def is_lesson(self) -> bool:
         return self.estimated_duration_minutes is not None
+
+
+def evaluate_documentation_challenge(
+    page: DocumentationPage,
+    source: str,
+) -> ChallengeFeedback:
+    if page.challenge_check is None:
+        return ChallengeFeedback(False, ("This page does not define a challenge check.",))
+    if not source.strip():
+        return ChallengeFeedback(False, ("Add your challenge script to the editor first.",))
+    try:
+        compile(source, "<documentation challenge>", "exec")
+    except SyntaxError as error:
+        line = error.lineno or "?"
+        return ChallengeFeedback(
+            False,
+            (f"Fix the Python syntax on line {line}: {error.msg}.",),
+        )
+
+    missing = []
+    for requirement in page.challenge_check.requirements:
+        if not any(token in source for token in requirement.tokens):
+            missing.append(f"Use {requirement.label}.")
+    if missing:
+        return ChallengeFeedback(False, tuple(missing))
+    return ChallengeFeedback(True, (page.challenge_check.success_message,))
 
 
 DOCUMENTATION_PAGES = (
@@ -389,6 +434,16 @@ DOCUMENTATION_PAGES = (
                 "print(\"Visible above 20 degrees:\", visible_ids)\n",
             ),
         ),
+        challenge_check=DocumentationChallengeCheck(
+            "Ground-station challenge structure looks ready: run it and confirm every printed satellite is above the 20-degree mask.",
+            (
+                ChallengeRequirement("GroundStation for the receiver", ("GroundStation",)),
+                ChallengeRequirement("orbital_to_eci to build satellite ECI positions", ("orbital_to_eci",)),
+                ChallengeRequirement("eci_to_ecef to rotate into Earth-fixed coordinates", ("eci_to_ecef",)),
+                ChallengeRequirement("calculate_visibility for look angles and mask status", ("calculate_visibility",)),
+                ChallengeRequirement("is_visible filtering before printing IDs", ("is_visible",)),
+            ),
+        ),
     ),
     DocumentationPage(
         "Position fixes",
@@ -498,6 +553,16 @@ DOCUMENTATION_PAGES = (
                 "print(fix.converged, fix.iterations)\n"
                 "print(round(fix.receiver_ecef.x_meters - receiver.x_meters, 6))\n"
                 "print(round(fix.receiver_clock_bias_seconds, 10))\n",
+            ),
+        ),
+        challenge_check=DocumentationChallengeCheck(
+            "Position-fix challenge structure looks ready: run it and inspect the printed residuals and 3D error.",
+            (
+                ChallengeRequirement("CartesianPosition for receiver and satellites", ("CartesianPosition",)),
+                ChallengeRequirement("calculate_pseudorange to generate observations", ("calculate_pseudorange",)),
+                ChallengeRequirement("PseudorangeObservation inputs for the solver", ("PseudorangeObservation",)),
+                ChallengeRequirement("solve_position for the receiver fix", ("solve_position",)),
+                ChallengeRequirement("residual output for measurement disagreement", ("residual", "residuals_meters")),
             ),
         ),
     ),
@@ -620,6 +685,18 @@ DOCUMENTATION_PAGES = (
                 "fix = positioning.solve_position(observations)\n"
                 "print(source_under_test)\n"
                 "print(round(max(abs(value) for value in fix.residuals_meters), 3))\n",
+            ),
+        ),
+        challenge_check=DocumentationChallengeCheck(
+            "Accuracy challenge structure looks ready: run it twice and confirm the seeded table repeats.",
+            (
+                ChallengeRequirement("classroom_error_model for seeded errors", ("classroom_error_model",)),
+                ChallengeRequirement("ERROR_SOURCE_NAMES loop coverage", ("ERROR_SOURCE_NAMES",)),
+                ChallengeRequirement("with_source_settings to isolate one source", ("with_source_settings",)),
+                ChallengeRequirement("apply_to_pseudorange to add each source's offset", ("apply_to_pseudorange",)),
+                ChallengeRequirement("PseudorangeObservation inputs for the solver", ("PseudorangeObservation",)),
+                ChallengeRequirement("solve_position for each source", ("solve_position",)),
+                ChallengeRequirement("calculate_position_error for 3D error", ("calculate_position_error",)),
             ),
         ),
     ),
@@ -792,7 +869,13 @@ def documentation_page_marker(
 
 
 class DocumentationPanel(tk.Frame):
-    def __init__(self, master: tk.Misc, close_command, insert_snippet_command=None):
+    def __init__(
+        self,
+        master: tk.Misc,
+        close_command,
+        insert_snippet_command=None,
+        check_challenge_command=None,
+    ):
         super().__init__(master, bg=PANEL, width=390)
         self.grid_propagate(False)
         self.grid_rowconfigure(2, weight=1)
@@ -800,6 +883,7 @@ class DocumentationPanel(tk.Frame):
         self.current_page = 0
         self.completed_pages: set[str] = set()
         self.insert_snippet_command = insert_snippet_command
+        self.check_challenge_command = check_challenge_command
         self.snippet_buttons: list[tk.Widget] = []
 
         header = tk.Frame(self, bg=PANEL)
@@ -855,11 +939,16 @@ class DocumentationPanel(tk.Frame):
             self.lesson_meta, bg=PANEL, fg=MUTED, font=("Segoe UI", 8), anchor="w",
         )
         self.lesson_status.grid(row=0, column=0, sticky="ew")
+        self.challenge_button = RoundedButton(
+            self.lesson_meta, "Check challenge", self._check_challenge,
+            width=114, height=27,
+        )
+        self.challenge_button.grid(row=0, column=1, sticky="e", padx=(8, 0))
         self.completion_button = RoundedButton(
             self.lesson_meta, "Mark complete", self._toggle_completion,
             width=104, height=27,
         )
-        self.completion_button.grid(row=0, column=1, sticky="e", padx=(8, 0))
+        self.completion_button.grid(row=0, column=2, sticky="e", padx=(8, 0))
 
         self.body = tk.Text(
             body_frame, bg=PANEL, fg=TEXT, relief="flat", bd=0,
@@ -917,6 +1006,11 @@ class DocumentationPanel(tk.Frame):
         self._refresh_page_list()
         self.show_page(self.current_page)
 
+    def _check_challenge(self) -> None:
+        if self.check_challenge_command is None:
+            return
+        self.check_challenge_command(DOCUMENTATION_PAGES[self.current_page])
+
     def _select_page(self, _event: tk.Event) -> None:
         selection = self.page_list.curselection()
         if selection:
@@ -942,6 +1036,10 @@ class DocumentationPanel(tk.Frame):
         self.lesson_status.configure(text=f"{state_text} - {duration_text}")
         self.completion_button.label = "Mark incomplete" if completed else "Mark complete"
         self.completion_button._draw()
+        if page.challenge_check is not None and self.check_challenge_command is not None:
+            self.challenge_button.grid()
+        else:
+            self.challenge_button.grid_remove()
 
         self.body.configure(state="normal")
         for button in self.snippet_buttons:
@@ -2114,6 +2212,7 @@ class OrbitStudio(tk.Tk):
             self.workspace_split,
             self.toggle_documentation,
             self.insert_documentation_snippet,
+            self.check_documentation_challenge,
         )
         self.documentation_open = False
 
@@ -2337,6 +2436,15 @@ class OrbitStudio(tk.Tk):
                 self.editor.insert("insert", "\n" if before_cursor.endswith("\n") else "\n\n")
         self.editor.insert("insert", code + "\n")
         self.highlighter.highlight()
+        self.editor.focus_set()
+
+    def check_documentation_challenge(self, page: DocumentationPage) -> None:
+        source = self.editor.get("1.0", "end-1c")
+        feedback = evaluate_documentation_challenge(page, source)
+        status = "Ready" if feedback.passed else "Needs work"
+        lines = [f"Challenge check: {page.title}", status]
+        lines.extend(f"- {message}" for message in feedback.messages)
+        self._set_output("\n".join(lines) + "\n")
         self.editor.focus_set()
 
     def open_script(self) -> None:
