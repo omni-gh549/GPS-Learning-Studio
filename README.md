@@ -220,7 +220,8 @@ open lesson to local application data. Lesson pages also provide runnable
 snippets that insert directly into the editor, giving each lab a ready-to-run
 starting point. Challenge pages add a Check challenge action that catches syntax
 errors and missing required APIs before the student compares the script output
-with the lesson success check. The
+with the lesson success check. Students can reset saved lesson progress from the
+documentation panel and reveal sample solutions after attempting a challenge. The
 Ground stations lesson is a guided 15-minute lab covering latitude/longitude,
 look angles, elevation masks, pass visibility, and an editor-ready coding
 challenge.

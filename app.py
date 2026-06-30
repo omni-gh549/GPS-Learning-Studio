@@ -143,6 +143,7 @@ class DocumentationPage:
     estimated_duration_minutes: int | None = None
     snippets: tuple[DocumentationSnippet, ...] = ()
     challenge_check: DocumentationChallengeCheck | None = None
+    sample_solution: str | None = None
 
     @property
     def is_lesson(self) -> bool:
@@ -216,6 +217,12 @@ def save_documentation_progress(
         json.dumps(payload, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
+
+
+def reset_documentation_progress(path: Path | None = None) -> DocumentationProgress:
+    progress = DocumentationProgress()
+    save_documentation_progress(progress, path)
+    return progress
 
 
 def evaluate_documentation_challenge(
@@ -523,6 +530,31 @@ DOCUMENTATION_PAGES = (
                 ChallengeRequirement("is_visible filtering before printing IDs", ("is_visible",)),
             ),
         ),
+        sample_solution=(
+            "import gps_sim.constellation as constellation\n"
+            "import gps_sim.coordinates as coordinates\n"
+            "import gps_sim.ground_stations as ground_stations\n"
+            "import gps_sim.visibility as visibility\n\n"
+            "station = ground_stations.GroundStation(\n"
+            "    latitude_degrees=0.0,\n"
+            "    longitude_degrees=0.0,\n"
+            "    altitude_meters=0.0,\n"
+            "    minimum_elevation_degrees=20.0,\n"
+            ")\n\n"
+            "visible_ids = []\n"
+            "for satellite in constellation.get_satellite_states():\n"
+            "    eci = coordinates.orbital_to_eci(\n"
+            "        26_560_000.0,\n"
+            "        satellite[\"inclination_degrees\"],\n"
+            "        satellite[\"longitude_of_ascending_node_degrees\"],\n"
+            "        satellite[\"orbital_angle_degrees\"],\n"
+            "    )\n"
+            "    ecef = coordinates.eci_to_ecef(eci, earth_rotation_degrees=0.0)\n"
+            "    look = visibility.calculate_visibility(ecef, station)\n"
+            "    if look.is_visible:\n"
+            "        visible_ids.append(satellite[\"id\"])\n\n"
+            "print(\"Visible satellite IDs:\", visible_ids)\n"
+        ),
     ),
     DocumentationPage(
         "Position fixes",
@@ -643,6 +675,36 @@ DOCUMENTATION_PAGES = (
                 ChallengeRequirement("solve_position for the receiver fix", ("solve_position",)),
                 ChallengeRequirement("residual output for measurement disagreement", ("residual", "residuals_meters")),
             ),
+        ),
+        sample_solution=(
+            "from gps_sim.coordinates import CartesianPosition\n"
+            "import gps_sim.measurements as measurements\n"
+            "import gps_sim.positioning as positioning\n\n"
+            "receiver = CartesianPosition(1_000_000.0, -2_000_000.0, 3_000_000.0)\n"
+            "satellites = [\n"
+            "    CartesianPosition(20_200_000.0, 0.0, 0.0),\n"
+            "    CartesianPosition(0.0, 21_200_000.0, 1_000_000.0),\n"
+            "    CartesianPosition(1_500_000.0, 0.0, 22_200_000.0),\n"
+            "    CartesianPosition(-20_500_000.0, -8_000_000.0, 12_000_000.0),\n"
+            "    CartesianPosition(18_000_000.0, 16_000_000.0, -8_000_000.0),\n"
+            "]\n\n"
+            "observations = []\n"
+            "for satellite in satellites:\n"
+            "    reading = measurements.calculate_pseudorange(\n"
+            "        receiver,\n"
+            "        satellite,\n"
+            "        receiver_clock_bias_seconds=0.0000015,\n"
+            "    )\n"
+            "    observations.append(positioning.PseudorangeObservation(satellite, reading.pseudorange_meters))\n"
+            "observations[-1] = positioning.PseudorangeObservation(\n"
+            "    observations[-1].satellite_ecef,\n"
+            "    observations[-1].pseudorange_meters + 25.0,\n"
+            ")\n\n"
+            "fix = positioning.solve_position(observations)\n"
+            "report = positioning.calculate_position_error(fix, receiver, None)\n"
+            "print(\"3D error meters:\", round(report.position_error_meters, 3))\n"
+            "for residual in fix.residuals_meters:\n"
+            "    print(\"residual meters:\", round(residual, 3))\n"
         ),
     ),
     DocumentationPage(
@@ -777,6 +839,36 @@ DOCUMENTATION_PAGES = (
                 ChallengeRequirement("solve_position for each source", ("solve_position",)),
                 ChallengeRequirement("calculate_position_error for 3D error", ("calculate_position_error",)),
             ),
+        ),
+        sample_solution=(
+            "from gps_sim.coordinates import CartesianPosition\n"
+            "import gps_sim.errors as errors\n"
+            "import gps_sim.measurements as measurements\n"
+            "import gps_sim.positioning as positioning\n\n"
+            "receiver = CartesianPosition(1_000_000.0, -2_000_000.0, 3_000_000.0)\n"
+            "satellites = [\n"
+            "    CartesianPosition(20_200_000.0, 0.0, 0.0),\n"
+            "    CartesianPosition(0.0, 21_200_000.0, 1_000_000.0),\n"
+            "    CartesianPosition(1_500_000.0, 0.0, 22_200_000.0),\n"
+            "    CartesianPosition(-20_500_000.0, -8_000_000.0, 12_000_000.0),\n"
+            "    CartesianPosition(18_000_000.0, 16_000_000.0, -8_000_000.0),\n"
+            "]\n\n"
+            "for source_name in errors.ERROR_SOURCE_NAMES:\n"
+            "    model = errors.classroom_error_model(seed=42)\n"
+            "    for candidate in errors.ERROR_SOURCE_NAMES:\n"
+            "        model = model.with_source_settings(candidate, enabled=(candidate == source_name))\n"
+            "    observations = []\n"
+            "    for index, satellite in enumerate(satellites):\n"
+            "        reading = measurements.calculate_pseudorange(receiver, satellite)\n"
+            "        pseudorange = model.apply_to_pseudorange(\n"
+            "            reading.pseudorange_meters,\n"
+            "            f\"satellite-{index}\",\n"
+            "        )\n"
+            "        observations.append(positioning.PseudorangeObservation(satellite, pseudorange))\n"
+            "    fix = positioning.solve_position(observations)\n"
+            "    report = positioning.calculate_position_error(fix, receiver, None)\n"
+            "    max_residual = max(abs(value) for value in fix.residuals_meters)\n"
+            "    print(source_name, round(max_residual, 3), round(report.position_error_meters, 3))\n"
         ),
     ),
 )
@@ -970,6 +1062,7 @@ class DocumentationPanel(tk.Frame):
         self.check_challenge_command = check_challenge_command
         self.save_progress_command = save_progress_command
         self.snippet_buttons: list[tk.Widget] = []
+        self.revealed_solutions: set[str] = set()
 
         header = tk.Frame(self, bg=PANEL)
         header.grid(row=0, column=0, sticky="ew", padx=18, pady=(18, 10))
@@ -983,6 +1076,12 @@ class DocumentationPanel(tk.Frame):
         )
         close.pack(side="right")
         close.bind("<Button-1>", lambda _event: close_command())
+        reset = tk.Label(
+            header, text="Reset progress", bg=PANEL, fg=MUTED, cursor="hand2",
+            font=("Segoe UI", 9),
+        )
+        reset.pack(side="right", padx=(0, 14))
+        reset.bind("<Button-1>", lambda _event: self.reset_progress())
 
         navigation = tk.Frame(self, bg=PANEL)
         navigation.grid(row=1, column=0, sticky="ew", padx=18, pady=(0, 12))
@@ -1029,6 +1128,11 @@ class DocumentationPanel(tk.Frame):
             width=114, height=27,
         )
         self.challenge_button.grid(row=0, column=1, sticky="e", padx=(8, 0))
+        self.solution_button = RoundedButton(
+            self.lesson_meta, "Show solution", self._reveal_sample_solution,
+            width=104, height=27,
+        )
+        self.solution_button.grid(row=1, column=1, sticky="e", padx=(8, 0), pady=(6, 0))
         self.completion_button = RoundedButton(
             self.lesson_meta, "Mark complete", self._toggle_completion,
             width=104, height=27,
@@ -1115,10 +1219,25 @@ class DocumentationPanel(tk.Frame):
             return
         self.check_challenge_command(DOCUMENTATION_PAGES[self.current_page])
 
+    def _reveal_sample_solution(self) -> None:
+        page = DOCUMENTATION_PAGES[self.current_page]
+        if page.sample_solution is None:
+            return
+        self.revealed_solutions.add(page.title)
+        self.show_page(self.current_page)
+
     def mark_challenge_completed(self, page: DocumentationPage) -> None:
         if page.challenge_check is None:
             return
         self.completed_challenges.add(page.title)
+        self._save_progress()
+        self.show_page(self.current_page)
+
+    def reset_progress(self) -> None:
+        self.completed_pages.clear()
+        self.completed_challenges.clear()
+        self.last_open_lesson = None
+        self.current_page = 0
         self._save_progress()
         self.show_page(self.current_page)
 
@@ -1159,6 +1278,10 @@ class DocumentationPanel(tk.Frame):
             self.challenge_button.grid()
         else:
             self.challenge_button.grid_remove()
+        if page.sample_solution is not None:
+            self.solution_button.grid()
+        else:
+            self.solution_button.grid_remove()
 
         self.body.configure(state="normal")
         for button in self.snippet_buttons:
@@ -1200,7 +1323,8 @@ class DocumentationPanel(tk.Frame):
             self.body.insert("end", heading + "\n", "heading")
             for line in content.splitlines():
                 is_code = (
-                    line.startswith("import ")
+                    line.startswith("from ")
+                    or line.startswith("import ")
                     or line.startswith("constellation.")
                     or line.startswith("dynamics.")
                     or line.startswith("ground_stations.")
@@ -1214,6 +1338,18 @@ class DocumentationPanel(tk.Frame):
                     or line.startswith("    ")
                 )
                 self.body.insert("end", line + "\n", "code" if is_code else "body")
+            self.body.insert("end", "\n", "body")
+        if page.sample_solution is not None:
+            self.body.insert("end", "Sample solution\n", "heading")
+            if page.title in self.revealed_solutions:
+                for line in page.sample_solution.rstrip().splitlines():
+                    self.body.insert("end", line + "\n", "code")
+            else:
+                self.body.insert(
+                    "end",
+                    "Try the challenge first, then use Show solution to compare structure and output.\n",
+                    "body",
+                )
             self.body.insert("end", "\n", "body")
         self.body.configure(state="disabled")
         self.body.yview_moveto(0)

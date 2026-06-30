@@ -10,6 +10,7 @@ from app import (
     documentation_page_marker,
     evaluate_documentation_challenge,
     load_documentation_progress,
+    reset_documentation_progress,
     save_documentation_progress,
 )
 
@@ -67,6 +68,24 @@ class DocumentationTests(unittest.TestCase):
         self.assertEqual(frozenset({"Position fixes"}), progress.completed_challenges)
         self.assertIsNone(progress.last_open_lesson)
 
+    def test_documentation_progress_can_be_reset_locally(self) -> None:
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "progress.json"
+            save_documentation_progress(
+                DocumentationProgress(
+                    completed_pages=frozenset({"Quick start"}),
+                    completed_challenges=frozenset({"Ground stations"}),
+                    last_open_lesson="Ground stations",
+                ),
+                path,
+            )
+
+            reset = reset_documentation_progress(path)
+            loaded = load_documentation_progress(path)
+
+        self.assertEqual(DocumentationProgress(), reset)
+        self.assertEqual(DocumentationProgress(), loaded)
+
     def test_lesson_pages_include_runnable_editor_snippets(self) -> None:
         lesson_titles = {
             "Quick start",
@@ -97,6 +116,21 @@ class DocumentationTests(unittest.TestCase):
             with self.subTest(page=page.title):
                 self.assertIsNotNone(page.challenge_check)
                 self.assertGreaterEqual(len(page.challenge_check.requirements), 4)
+
+    def test_challenge_pages_include_compilable_sample_solutions(self) -> None:
+        challenge_pages = [
+            page
+            for page in DOCUMENTATION_PAGES
+            if page.challenge_check is not None
+        ]
+
+        self.assertGreaterEqual(len(challenge_pages), 3)
+        for page in challenge_pages:
+            with self.subTest(page=page.title):
+                self.assertIsNotNone(page.sample_solution)
+                solution = page.sample_solution or ""
+                self.assertIn("print(", solution)
+                compile(solution, f"<documentation solution: {page.title}>", "exec")
 
     def test_documentation_challenge_check_reports_missing_focus_items(self) -> None:
         page = next(
