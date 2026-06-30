@@ -125,6 +125,14 @@ class ChallengeFeedback:
 
 
 @dataclass(frozen=True)
+class LearningPathStep:
+    sequence: int
+    page_title: str
+    milestone: str
+    outcome: str
+
+
+@dataclass(frozen=True)
 class DocumentationProgress:
     completed_pages: frozenset[str] = frozenset()
     completed_challenges: frozenset[str] = frozenset()
@@ -225,6 +233,20 @@ def reset_documentation_progress(path: Path | None = None) -> DocumentationProgr
     return progress
 
 
+def learning_path_step_for_page(page_title: str) -> LearningPathStep | None:
+    for step in LEARNING_PATH:
+        if step.page_title == page_title:
+            return step
+    return None
+
+
+def learning_path_completion_summary(
+    completed_pages: set[str] | frozenset[str],
+) -> tuple[int, int]:
+    complete = sum(1 for step in LEARNING_PATH if step.page_title in completed_pages)
+    return complete, len(LEARNING_PATH)
+
+
 def evaluate_documentation_challenge(
     page: DocumentationPage,
     source: str,
@@ -261,6 +283,44 @@ DOCUMENTATION_PAGES = (
             ("First run", "Press F5 or choose Run. The starter script imports the constellation module, reads every satellite state, and prints the result."),
             ("A good next experiment", "Change the script so it prints only each satellite ID and orbital angle. Run it several times and watch the angles advance."),
         ),
+    ),
+    DocumentationPage(
+        "Learning path",
+        "COURSE MAP",
+        "Follow the core course from orbit telemetry through visibility, positioning, and accuracy.",
+        (
+            (
+                "How to use the path",
+                "Work through the four milestone lessons in order. Mark each lesson complete after running the lab snippet and checking the expected output or visual result.",
+            ),
+            (
+                "1. Orbit telemetry",
+                "Quick start introduces live satellite telemetry, orbital angles, and simulation time controls. This is the baseline for every later observation.",
+            ),
+            (
+                "2. Visibility",
+                "Ground stations turns orbital positions into local azimuth, elevation, range, and pass visibility for a receiver on Earth.",
+            ),
+            (
+                "3. Positioning",
+                "Position fixes builds pseudoranges into a four-unknown receiver solution with residuals and clock-bias checks.",
+            ),
+            (
+                "4. Accuracy",
+                "Error and accuracy compares clean and error-affected fixes so students can separate measurement error from poor satellite geometry.",
+            ),
+            (
+                "Completion target",
+                "The path is complete when Quick start, Ground stations, Position fixes, and Error and accuracy are all marked complete. Challenge checks on the three lab lessons provide stronger evidence than reading alone.",
+            ),
+        ),
+        objectives=(
+            "Connect orbit telemetry to receiver visibility.",
+            "Use pseudoranges to solve a receiver position.",
+            "Interpret accuracy experiments from residuals, position error, and DOP.",
+        ),
+        prerequisites=("Welcome",),
+        estimated_duration_minutes=65,
     ),
     DocumentationPage(
         "Quick start",
@@ -874,6 +934,34 @@ DOCUMENTATION_PAGES = (
 )
 
 
+LEARNING_PATH = (
+    LearningPathStep(
+        1,
+        "Quick start",
+        "Orbit telemetry",
+        "Read satellite IDs, orbital angles, and simulation time controls.",
+    ),
+    LearningPathStep(
+        2,
+        "Ground stations",
+        "Visibility",
+        "Turn satellite positions into azimuth, elevation, range, and pass visibility.",
+    ),
+    LearningPathStep(
+        3,
+        "Position fixes",
+        "Positioning",
+        "Generate pseudoranges and recover receiver position plus clock bias.",
+    ),
+    LearningPathStep(
+        4,
+        "Error and accuracy",
+        "Accuracy",
+        "Compare clean and error-affected fixes using residuals, position error, and DOP.",
+    ),
+)
+
+
 def rounded_rectangle(canvas: tk.Canvas, x1: float, y1: float, x2: float, y2: float,
                       radius: float, **kwargs) -> int:
     points = [
@@ -1291,6 +1379,23 @@ class DocumentationPanel(tk.Frame):
         self.body.insert("end", page.eyebrow + "\n", "eyebrow")
         self.body.insert("end", page.title + "\n", "title")
         self.body.insert("end", page.summary + "\n", "summary")
+        path_complete, path_total = learning_path_completion_summary(self.completed_pages)
+        if page.title == "Learning path":
+            self.body.insert("end", "Path progress\n", "heading")
+            self.body.insert(
+                "end",
+                f"{path_complete} of {path_total} milestone lessons complete\n\n",
+                "body",
+            )
+        path_step = learning_path_step_for_page(page.title)
+        if path_step is not None:
+            self.body.insert("end", "Learning path\n", "heading")
+            self.body.insert(
+                "end",
+                f"Step {path_step.sequence} of {len(LEARNING_PATH)}: {path_step.milestone}\n"
+                f"{path_step.outcome}\n\n",
+                "body",
+            )
         if page.is_lesson:
             self.body.insert("end", "Estimated duration\n", "heading")
             self.body.insert("end", f"{page.estimated_duration_minutes} minutes\n\n", "body")

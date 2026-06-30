@@ -8,7 +8,7 @@ A dependency-free Python desktop application with:
 - Named simulator modules with explicit imports
 - Function suggestions and autocomplete
 - Multi-page in-app documentation with lesson objectives, prerequisites,
-  saved completion state, runnable snippets, API references, and coding challenges
+  a learning path, saved completion state, runnable snippets, API references, and coding challenges
 - Open, save, and run controls
 
 See [ROADMAP.md](ROADMAP.md) for the prioritized feature plan.
@@ -56,6 +56,8 @@ Editor shortcuts:
 - `Ctrl+O`: open script
 - Function suggestions appear automatically as you type
 - Lesson pages include runnable snippets that can be inserted into the editor
+- The Learning path page sequences orbit telemetry, visibility, positioning,
+  and accuracy into one course track
 - Challenge lesson pages include a lightweight checker that reviews the editor
   script for syntax and the key APIs needed by the exercise, then reports
   focused feedback in the output pane
@@ -215,16 +217,20 @@ Click the documentation icon in the left sidebar for descriptions of the
 simulator, editor, file controls, and every public simulator function. Lesson
 pages show estimated duration, prerequisites, objectives, and a session
 completion toggle so a student can track what they have finished across app
-restarts. The app saves completed lessons, passed challenge checks, and the last
-open lesson to local application data. Lesson pages also provide runnable
-snippets that insert directly into the editor, giving each lab a ready-to-run
-starting point. Challenge pages add a Check challenge action that catches syntax
-errors and missing required APIs before the student compares the script output
-with the lesson success check. Students can reset saved lesson progress from the
-documentation panel and reveal sample solutions after attempting a challenge. The
-Ground stations lesson is a guided 15-minute lab covering latitude/longitude,
-look angles, elevation masks, pass visibility, and an editor-ready coding
-challenge.
+restarts. The Learning path page ties the course together as four milestones:
+orbit telemetry in Quick start, visibility in Ground stations, positioning in
+Position fixes, and accuracy experiments in Error and accuracy. Each milestone
+lesson also shows its path step and outcome. The app saves completed lessons,
+passed challenge checks, and the last open lesson to local application data.
+Lesson pages also provide runnable snippets that insert directly into the editor,
+giving each lab a ready-to-run starting point. Challenge pages add a Check
+challenge action that catches syntax errors and missing required APIs before the
+student compares the script output with the lesson success check. Students can
+reset saved lesson progress from the documentation panel and reveal sample
+solutions after attempting a challenge.
+The Ground stations lesson is a guided 15-minute lab covering
+latitude/longitude, look angles, elevation masks, pass visibility, and an
+editor-ready coding challenge.
 The Position fixes lesson is a worked trilateration lab covering pseudorange
 generation, receiver clock bias, solver setup, residual checks, and a solver
 challenge.

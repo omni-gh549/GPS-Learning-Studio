@@ -9,6 +9,8 @@ from app import (
     DocumentationProgress,
     documentation_page_marker,
     evaluate_documentation_challenge,
+    learning_path_completion_summary,
+    learning_path_step_for_page,
     load_documentation_progress,
     reset_documentation_progress,
     save_documentation_progress,
@@ -19,7 +21,7 @@ class DocumentationTests(unittest.TestCase):
     def test_lesson_pages_have_learning_metadata(self) -> None:
         lessons = [page for page in DOCUMENTATION_PAGES if page.is_lesson]
 
-        self.assertGreaterEqual(len(lessons), 4)
+        self.assertGreaterEqual(len(lessons), 5)
         for page in lessons:
             with self.subTest(page=page.title):
                 self.assertGreater(page.estimated_duration_minutes or 0, 0)
@@ -35,6 +37,49 @@ class DocumentationTests(unittest.TestCase):
 
         self.assertEqual("[ ] ", documentation_page_marker(page, set()))
         self.assertEqual("[x] ", documentation_page_marker(page, {"Quick start"}))
+
+    def test_learning_path_covers_core_course_order(self) -> None:
+        expected = (
+            ("Quick start", "Orbit telemetry"),
+            ("Ground stations", "Visibility"),
+            ("Position fixes", "Positioning"),
+            ("Error and accuracy", "Accuracy"),
+        )
+
+        for sequence, (page_title, milestone) in enumerate(expected, start=1):
+            with self.subTest(page=page_title):
+                step = learning_path_step_for_page(page_title)
+                self.assertIsNotNone(step)
+                self.assertEqual(sequence, step.sequence)
+                self.assertEqual(milestone, step.milestone)
+                self.assertIn(page_title, {page.title for page in DOCUMENTATION_PAGES})
+
+        self.assertIsNone(learning_path_step_for_page("Welcome"))
+
+    def test_learning_path_overview_page_explains_milestones(self) -> None:
+        page = next(page for page in DOCUMENTATION_PAGES if page.title == "Learning path")
+        content = "\n".join(
+            (page.title, page.eyebrow, page.summary)
+            + tuple(text for section in page.sections for text in section)
+        )
+
+        self.assertFalse(page.placeholder)
+        self.assertIn("orbit telemetry", content.lower())
+        self.assertIn("visibility", content.lower())
+        self.assertIn("positioning", content.lower())
+        self.assertIn("accuracy", content.lower())
+        self.assertIn("Quick start", content)
+        self.assertIn("Ground stations", content)
+        self.assertIn("Position fixes", content)
+        self.assertIn("Error and accuracy", content)
+
+    def test_learning_path_completion_summary_counts_milestones_only(self) -> None:
+        complete, total = learning_path_completion_summary(
+            frozenset({"Welcome", "Quick start", "Position fixes"})
+        )
+
+        self.assertEqual(2, complete)
+        self.assertEqual(4, total)
 
     def test_documentation_progress_round_trips_locally(self) -> None:
         with TemporaryDirectory() as directory:

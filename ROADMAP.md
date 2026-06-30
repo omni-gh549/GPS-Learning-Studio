@@ -104,7 +104,7 @@ reference.
 - [x] Add lightweight checks for challenges and show focused feedback.
 - [x] Save progress, completed challenges, and the last open lesson locally.
 - [x] Add a reset-progress option and sample solution reveal.
-- [ ] Add a learning path covering orbit telemetry, visibility, positioning, and
+- [x] Add a learning path covering orbit telemetry, visibility, positioning, and
   accuracy.
 
 ### Acceptance criteria
