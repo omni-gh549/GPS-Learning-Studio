@@ -470,6 +470,9 @@ class DocumentationTests(unittest.TestCase):
         )
 
         self.assertIn("Measurement links", content)
+        self.assertIn("Editable scenario", content)
+        self.assertIn("satellite count", content.lower())
+        self.assertIn("receiver clock bias", content.lower())
         self.assertIn("horizontal error", content.lower())
         self.assertIn("vertical error", content.lower())
         self.assertIn("pseudorange", content.lower())

@@ -70,6 +70,9 @@ Visualizer controls:
   simulation timestamp
 - Edit Speed to change the orbital time-scale multiplier, such as `0x`, `1x`,
   `2x`, or `20x`
+- Edit Sats, Incl, and Alt km to regenerate the active classroom constellation
+- Edit Lat, Lon, Mask, and Clock us to move the receiver and change its
+  pseudorange clock bias
 - Hold the left mouse button and drag to rotate the camera
 - Hover a satellite dot to show its Globalstar ID
 - Orange markers show named ground stations
@@ -98,6 +101,7 @@ import gps_sim.errors as errors
 import gps_sim.ground_stations as ground_stations
 import gps_sim.measurements as measurements
 import gps_sim.positioning as positioning
+import gps_sim.scenario_parameters as scenario_parameters
 import gps_sim.visibility as visibility
 
 print(constellation.get_satellite_states())

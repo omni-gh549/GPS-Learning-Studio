@@ -24,8 +24,14 @@ from gps_sim.coordinates import (
     WGS84_SEMI_MAJOR_AXIS_METERS,
     orbital_to_eci,
 )
-from gps_sim.ground_stations import create_station, list_stations
+from gps_sim.ground_stations import create_station, list_stations, update_station
 from gps_sim.runtime import bind_visualizer
+from gps_sim.scenario_parameters import (
+    ConstellationParameters,
+    ReceiverParameters,
+    SatelliteParameters,
+    build_satellite_parameters,
+)
 from gps_sim.simulation_time import SimulationClock
 from gps_sim.updater import CURRENT_VERSION, download_and_install, find_update, is_packaged
 from gps_sim.visualization import (
@@ -65,6 +71,7 @@ SIMULATOR_COMPLETIONS = (
     ("import gps_sim.ground_stations as ground_stations", "import gps_sim.ground_stations as ground_stations", "#8eb6d8"),
     ("import gps_sim.measurements as measurements", "import gps_sim.measurements as measurements", "#8eb6d8"),
     ("import gps_sim.positioning as positioning", "import gps_sim.positioning as positioning", "#8eb6d8"),
+    ("import gps_sim.scenario_parameters as scenario_parameters", "import gps_sim.scenario_parameters as scenario_parameters", "#8eb6d8"),
     ("import gps_sim.visibility as visibility", "import gps_sim.visibility as visibility", "#8eb6d8"),
     ("constellation.get_satellite_states()  -> list[dict]", "constellation.get_satellite_states()", "#7db6a6"),
     ("constellation.get_satellite_count()  -> int", "constellation.get_satellite_count()", "#7db6a6"),
@@ -471,10 +478,11 @@ DOCUMENTATION_PAGES = (
             ("Camera", "Hold the left mouse button and drag to rotate the view around Earth."),
             ("Satellites", "Hover a satellite marker to display its Globalstar ID. Each colored marker follows its own inclined orbital plane."),
             ("Ground stations", "Orange markers show named stations. Click a front-facing marker to select it and inspect the live azimuth, elevation, range, and visibility table. Green dashed links connect stations to satellites at or above the elevation mask."),
+            ("Editable scenario", "Use the visualizer controls to change satellite count, inclination, orbital altitude, receiver latitude, receiver longitude, elevation mask, and receiver clock bias. Applying changes redraws the constellation and receiver fix without saving a scenario file."),
             ("Measurement links", "Amber dashed links show the selected receiver's simplified pseudorange measurements to the satellites used by the position-fix display. Brighter amber means the satellite is above the station elevation mask; muted amber keeps below-mask observations visible for comparison."),
             ("Position fix", "The selected station also drives a simulated pseudorange fix. The receiver panel compares the true station position with the estimated position, clock bias, residual statistics, horizontal error, vertical error, and 3D error; a dashed yellow ring marks the estimated receiver on Earth."),
             ("Accuracy comparison", "The accuracy panel compares a clean before fix with an after fix that applies the seeded classroom error model, then plots both 3D position errors over time so students can see the error source change the solution."),
-            ("Time", "The four satellites use 113-116 minute orbital periods. Increase the orbital time scale to make changes easier to observe during a lesson."),
+            ("Time", "The satellites use classroom-scale orbital periods near 114 minutes. Increase the orbital time scale to make changes easier to observe during a lesson."),
         ),
     ),
     DocumentationPage(
@@ -1472,11 +1480,27 @@ class DocumentationPanel(tk.Frame):
 @dataclass
 class Satellite:
     sat_id: int
+    radius_meters: float
     inclination: float
     node: float
     phase: float
     speed: float
     color: str
+
+
+def satellite_from_parameters(
+    parameters: SatelliteParameters,
+    color: str,
+) -> Satellite:
+    return Satellite(
+        sat_id=parameters.satellite_id,
+        radius_meters=parameters.radius_meters,
+        inclination=math.radians(parameters.inclination_degrees),
+        node=math.radians(parameters.longitude_of_ascending_node_degrees),
+        phase=math.radians(parameters.orbital_angle_degrees),
+        speed=math.tau / parameters.orbital_period_seconds,
+        color=color,
+    )
 
 
 class EarthVisualizer(tk.Canvas):
@@ -1500,12 +1524,15 @@ class EarthVisualizer(tk.Canvas):
         self.selected_station_name: str | None = None
         self.camera_dragged = False
         self.stars: list[tuple[float, float, float]] = []
-        self.satellites = [
-            Satellite(1, math.radians(52), math.radians(12), 0.0, math.tau / (114 * 60), SATELLITE_COLORS[0]),
-            Satellite(2, math.radians(52), math.radians(102), 1.45, math.tau / (115 * 60), SATELLITE_COLORS[1]),
-            Satellite(3, math.radians(70), math.radians(202), 2.85, math.tau / (113 * 60), SATELLITE_COLORS[2]),
-            Satellite(4, math.radians(35), math.radians(292), 4.35, math.tau / (116 * 60), SATELLITE_COLORS[3]),
-        ]
+        self.constellation_parameters = ConstellationParameters()
+        self.receiver_parameters = ReceiverParameters()
+        self.receiver_station_name = "Receiver"
+        self.receiver_clock_bias_seconds = (
+            self.receiver_parameters.clock_bias_seconds
+        )
+        self._apply_receiver_station(self.receiver_parameters)
+        self.selected_station_name = self.receiver_station_name
+        self.satellites = self._build_satellites(self.constellation_parameters)
         self.bind("<Configure>", self._make_stars)
         self.bind("<Motion>", self._on_motion)
         self.bind("<ButtonPress-1>", self._start_camera_drag)
@@ -1513,6 +1540,44 @@ class EarthVisualizer(tk.Canvas):
         self.bind("<ButtonRelease-1>", self._stop_camera_drag)
         self.bind("<Leave>", lambda _event: self._clear_hover())
         self.after(33, self._animate)
+
+    @staticmethod
+    def _build_satellites(parameters: ConstellationParameters) -> list[Satellite]:
+        return [
+            satellite_from_parameters(
+                satellite,
+                SATELLITE_COLORS[index % len(SATELLITE_COLORS)],
+            )
+            for index, satellite in enumerate(build_satellite_parameters(parameters))
+        ]
+
+    def apply_scenario_parameters(
+        self,
+        constellation: ConstellationParameters,
+        receiver: ReceiverParameters,
+    ) -> None:
+        self.constellation_parameters = constellation
+        self.receiver_parameters = receiver
+        self.receiver_clock_bias_seconds = receiver.clock_bias_seconds
+        self._apply_receiver_station(receiver)
+        self.selected_station_name = self.receiver_station_name
+        self.satellites = self._build_satellites(constellation)
+        self.accuracy_history = ()
+        self.accuracy_history_station = None
+        self._draw_scene()
+        self._notify_state_listeners()
+
+    def _apply_receiver_station(self, receiver: ReceiverParameters) -> None:
+        station_kwargs = {
+            "latitude_degrees": receiver.latitude_degrees,
+            "longitude_degrees": receiver.longitude_degrees,
+            "altitude_meters": receiver.altitude_meters,
+            "minimum_elevation_degrees": receiver.minimum_elevation_degrees,
+        }
+        if self.receiver_station_name in list_stations():
+            update_station(self.receiver_station_name, **station_kwargs)
+        else:
+            create_station(self.receiver_station_name, **station_kwargs)
 
     def add_state_listener(self, listener: Callable[[], None]) -> None:
         self._state_listeners.append(listener)
@@ -1639,7 +1704,7 @@ class EarthVisualizer(tk.Canvas):
 
     def _orbit_point(self, sat: Satellite, angle: float) -> tuple[float, float, float]:
         position = orbital_to_eci(
-            SATELLITE_ORBIT_RADIUS_METERS,
+            sat.radius_meters,
             math.degrees(sat.inclination),
             math.degrees(sat.node),
             math.degrees(angle),
@@ -1669,7 +1734,7 @@ class EarthVisualizer(tk.Canvas):
         return tuple(
             SatelliteSceneState(
                 satellite_id=sat.sat_id,
-                radius_meters=SATELLITE_ORBIT_RADIUS_METERS,
+                radius_meters=sat.radius_meters,
                 inclination_degrees=math.degrees(sat.inclination),
                 longitude_of_ascending_node_degrees=math.degrees(sat.node),
                 orbital_angle_degrees=math.degrees(
@@ -1831,7 +1896,10 @@ class EarthVisualizer(tk.Canvas):
             )
 
         if selected_station_scene is not None:
-            comparison = build_accuracy_comparison_display(selected_station_scene)
+            comparison = build_accuracy_comparison_display(
+                selected_station_scene,
+                receiver_clock_bias_seconds=self.receiver_clock_bias_seconds,
+            )
             position_fix = comparison.baseline
             if self.accuracy_history_station != selected_station_scene.name:
                 self.accuracy_history = ()
@@ -1882,7 +1950,10 @@ class EarthVisualizer(tk.Canvas):
         if station_depth < 0.0:
             return
 
-        for measurement in build_receiver_measurement_links(station_scene):
+        for measurement in build_receiver_measurement_links(
+            station_scene,
+            receiver_clock_bias_seconds=self.receiver_clock_bias_seconds,
+        ):
             satellite_projection = projected_satellites_by_id.get(
                 measurement.satellite_id
             )
@@ -2647,6 +2718,7 @@ class OrbitStudio(tk.Tk):
         self.visualizer = EarthVisualizer(left.body)
         self.visualizer.pack(fill="both", expand=True)
         self._build_simulation_controls(left.body)
+        self._build_scenario_controls(left.body)
         self.visualizer.add_state_listener(
             lambda: self._refresh_simulation_controls(reschedule=False)
         )
@@ -2819,6 +2891,114 @@ class OrbitStudio(tk.Tk):
         self.simulation_speed.bind(
             "<FocusOut>",
             lambda _event: self.apply_simulation_speed_entry(),
+        )
+
+    def _build_scenario_controls(self, parent: tk.Misc) -> None:
+        controls = tk.Frame(parent, bg=PANEL)
+        controls.pack(fill="x", padx=8, pady=(0, 8))
+        self.constellation_count_var = tk.StringVar(
+            value=str(self.visualizer.constellation_parameters.satellite_count)
+        )
+        self.constellation_inclination_var = tk.StringVar(
+            value=self._format_speed(
+                self.visualizer.constellation_parameters.inclination_degrees
+            )
+        )
+        self.constellation_altitude_var = tk.StringVar(
+            value=self._format_speed(
+                self.visualizer.constellation_parameters.altitude_kilometers
+            )
+        )
+        self.receiver_latitude_var = tk.StringVar(
+            value=f"{self.visualizer.receiver_parameters.latitude_degrees:g}"
+        )
+        self.receiver_longitude_var = tk.StringVar(
+            value=f"{self.visualizer.receiver_parameters.longitude_degrees:g}"
+        )
+        self.receiver_mask_var = tk.StringVar(
+            value=f"{self.visualizer.receiver_parameters.minimum_elevation_degrees:g}"
+        )
+        self.receiver_clock_var = tk.StringVar(
+            value=f"{self.visualizer.receiver_parameters.clock_bias_microseconds:g}"
+        )
+        for label, variable, width in (
+            ("Sats", self.constellation_count_var, 4),
+            ("Incl", self.constellation_inclination_var, 5),
+            ("Alt km", self.constellation_altitude_var, 7),
+            ("Lat", self.receiver_latitude_var, 8),
+            ("Lon", self.receiver_longitude_var, 8),
+            ("Mask", self.receiver_mask_var, 5),
+            ("Clock us", self.receiver_clock_var, 7),
+        ):
+            self._add_scenario_entry(controls, label, variable, width)
+        RoundedButton(
+            controls,
+            text="Apply",
+            command=self.apply_scenario_entries,
+            width=58,
+            height=28,
+        ).pack(side="left", padx=(4, 8))
+        self.scenario_status_var = tk.StringVar(value="")
+        tk.Label(
+            controls,
+            textvariable=self.scenario_status_var,
+            bg=PANEL,
+            fg=MUTED,
+            font=("Segoe UI", 8),
+            anchor="w",
+        ).pack(side="left", fill="x", expand=True)
+
+    def _add_scenario_entry(
+        self,
+        parent: tk.Misc,
+        label: str,
+        variable: tk.StringVar,
+        width: int,
+    ) -> None:
+        tk.Label(
+            parent,
+            text=label,
+            bg=PANEL,
+            fg=MUTED,
+            font=("Segoe UI", 8, "bold"),
+        ).pack(side="left", padx=(0, 3))
+        entry = tk.Entry(
+            parent,
+            textvariable=variable,
+            width=width,
+            bg="#202224",
+            fg=TEXT,
+            insertbackground=TEXT,
+            relief="flat",
+            justify="center",
+            font=("Cascadia Mono", 9),
+        )
+        entry.pack(side="left", padx=(0, 7), ipady=4)
+        entry.bind(
+            "<Return>",
+            lambda _event: self.apply_scenario_entries(),
+        )
+
+    def apply_scenario_entries(self) -> None:
+        try:
+            constellation = ConstellationParameters(
+                satellite_count=int(self.constellation_count_var.get()),
+                inclination_degrees=float(self.constellation_inclination_var.get()),
+                altitude_kilometers=float(self.constellation_altitude_var.get()),
+            )
+            receiver = ReceiverParameters(
+                latitude_degrees=float(self.receiver_latitude_var.get()),
+                longitude_degrees=float(self.receiver_longitude_var.get()),
+                altitude_meters=self.visualizer.receiver_parameters.altitude_meters,
+                minimum_elevation_degrees=float(self.receiver_mask_var.get()),
+                clock_bias_microseconds=float(self.receiver_clock_var.get()),
+            )
+        except ValueError as error:
+            self.scenario_status_var.set(str(error))
+            return
+        self.visualizer.apply_scenario_parameters(constellation, receiver)
+        self.scenario_status_var.set(
+            f"{constellation.satellite_count} satellites, receiver {receiver.latitude_degrees:g}/{receiver.longitude_degrees:g}"
         )
 
     def toggle_simulation_playback(self) -> None:
