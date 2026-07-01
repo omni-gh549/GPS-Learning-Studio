@@ -122,7 +122,7 @@ Make experiments easier to set up, repeat, and share.
 
 ### Features
 
-- [ ] Add play, pause, step, simulation-time, and speed controls.
+- [x] Add play, pause, step, simulation-time, and speed controls.
 - [ ] Allow constellation and receiver parameters to be edited in the UI.
 - [ ] Save and load versioned scenario files.
 - [ ] Ship example scenarios for strong geometry, poor geometry, clock bias,

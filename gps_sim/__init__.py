@@ -8,6 +8,7 @@ from . import (
     ground_stations,
     measurements,
     positioning,
+    simulation_time,
     visibility,
     visualization,
 )
@@ -20,6 +21,7 @@ __all__ = [
     "ground_stations",
     "measurements",
     "positioning",
+    "simulation_time",
     "visibility",
     "visualization",
 ]

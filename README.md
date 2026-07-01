@@ -64,6 +64,12 @@ Editor shortcuts:
 
 Visualizer controls:
 
+- Use Pause/Play to stop or resume simulation time without resetting the scene
+- Use Step to advance the paused simulation by 60 seconds
+- Edit the Time field with seconds, `MM:SS`, or `HH:MM:SS` to jump to a specific
+  simulation timestamp
+- Edit Speed to change the orbital time-scale multiplier, such as `0x`, `1x`,
+  `2x`, or `20x`
 - Hold the left mouse button and drag to rotate the camera
 - Hover a satellite dot to show its Globalstar ID
 - Orange markers show named ground stations
@@ -76,9 +82,9 @@ Visualizer controls:
 - Amber dashed links show the selected receiver's simplified pseudorange
   measurements, with brighter links for satellites above the elevation mask
 
-The Earth and satellites animate at real-time orbital rates. Use
-`dynamics.set_orbital_time_scale(...)` in the editor when a faster classroom
-demonstration is useful.
+The Earth and satellites animate at real-time orbital rates by default. Use the
+visual controls or `gps_sim.dynamics` functions when a faster classroom
+demonstration, paused inspection, or repeatable timestamp is useful.
 
 ## Simulator modules
 
@@ -99,6 +105,11 @@ print(constellation.get_satellite_count())
 
 dynamics.set_orbital_time_scale(2.0)
 dynamics.set_earth_rotation_scale(0.5)
+dynamics.pause_simulation()
+dynamics.step_simulation(60.0)
+dynamics.set_simulation_time(3600.0)
+print(dynamics.get_simulation_time())
+dynamics.play_simulation()
 dynamics.reset_simulation()
 
 station = ground_stations.create_station(

@@ -15,6 +15,7 @@ import time
 import traceback
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Callable
 import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog
 
@@ -25,6 +26,7 @@ from gps_sim.coordinates import (
 )
 from gps_sim.ground_stations import create_station, list_stations
 from gps_sim.runtime import bind_visualizer
+from gps_sim.simulation_time import SimulationClock
 from gps_sim.updater import CURRENT_VERSION, download_and_install, find_update, is_packaged
 from gps_sim.visualization import (
     AccuracyComparisonDisplay,
@@ -369,10 +371,13 @@ DOCUMENTATION_PAGES = (
     DocumentationPage(
         "Dynamics API",
         "API REFERENCE",
-        "Control orbital propagation, Earth rotation, and simulation reset.",
+        "Control playback, simulation time, orbital propagation, Earth rotation, and reset.",
         (
             ("Import", "import gps_sim.dynamics as dynamics"),
-            ("set_orbital_time_scale(multiplier)", "dynamics.set_orbital_time_scale(2.0)\n\nSets orbital speed. Use 1.0 for real time, a larger number to accelerate, or 0.0 to pause the satellites."),
+            ("play_simulation() / pause_simulation()", "dynamics.pause_simulation()\ndynamics.play_simulation()\n\nPauses or resumes simulation-time playback without resetting the current timestamp."),
+            ("step_simulation(seconds)", "dynamics.step_simulation(60.0)\n\nAdvances the simulation by a fixed number of seconds. This works while paused, which is useful for frame-by-frame classroom observations."),
+            ("set_simulation_time(seconds)", "dynamics.set_simulation_time(3600.0)\nprint(dynamics.get_simulation_time())\n\nJumps to a specific elapsed simulation time and reports the current timestamp in seconds."),
+            ("set_orbital_time_scale(multiplier)", "dynamics.set_orbital_time_scale(2.0)\n\nSets orbital speed. Use 1.0 for real time, a larger number to accelerate, or 0.0 for a stopped clock."),
             ("set_earth_rotation_scale(multiplier)", "dynamics.set_earth_rotation_scale(0.5)\n\nSets the visual Earth rotation speed independently of satellite motion."),
             ("reset_simulation()", "dynamics.reset_simulation()\n\nRestores the camera and both time scales to their defaults."),
         ),
@@ -1024,6 +1029,10 @@ class RoundedButton(tk.Canvas):
         self.hovered = hovered
         self._draw()
 
+    def set_text(self, text: str) -> None:
+        self.label = text
+        self._draw()
+
     def _click(self, event: tk.Event) -> None:
         if 0 <= event.x <= int(self["width"]) and 0 <= event.y <= int(self["height"]):
             self.command()
@@ -1475,15 +1484,14 @@ class EarthVisualizer(tk.Canvas):
         super().__init__(
             master, bg=PANEL, highlightthickness=0, bd=0, cursor="crosshair"
         )
-        self.start_time = time.perf_counter()
+        self.clock = SimulationClock()
         self.earth_rotation = 0.0
         self.camera_yaw = 0.0
         self.camera_pitch = math.radians(18)
         self.drag_origin: tuple[int, int] | None = None
-        self.orbit_speed = 1.0
         self.earth_speed = 1.0
         self.last_frame_time = time.perf_counter()
-        self.running = True
+        self._state_listeners: list[Callable[[], None]] = []
         self.projected_satellites: list[tuple[float, float, Satellite]] = []
         self.projected_stations: list[tuple[float, float, str]] = []
         self.accuracy_history: tuple[AccuracyHistoryPoint, ...] = ()
@@ -1506,31 +1514,69 @@ class EarthVisualizer(tk.Canvas):
         self.bind("<Leave>", lambda _event: self._clear_hover())
         self.after(33, self._animate)
 
+    def add_state_listener(self, listener: Callable[[], None]) -> None:
+        self._state_listeners.append(listener)
+
+    def _notify_state_listeners(self) -> None:
+        for listener in self._state_listeners:
+            listener()
+
+    def get_simulation_time(self) -> float:
+        return self.clock.state().simulation_seconds
+
+    def play(self) -> None:
+        self.clock.play()
+        self._draw_scene()
+        self._notify_state_listeners()
+
+    def pause(self) -> None:
+        self.clock.pause()
+        self._draw_scene()
+        self._notify_state_listeners()
+
+    def toggle_playback(self) -> bool:
+        is_playing = self.clock.toggle()
+        self._draw_scene()
+        self._notify_state_listeners()
+        return is_playing
+
+    def step(self, seconds: float) -> None:
+        self.clock.step(seconds)
+        self._draw_scene()
+        self._notify_state_listeners()
+
+    def set_simulation_time(self, seconds: float) -> None:
+        self.clock.set_time(seconds)
+        self._draw_scene()
+        self._notify_state_listeners()
+
     def set_orbit_speed(self, multiplier: float) -> None:
-        self.orbit_speed = max(0.0, float(multiplier))
+        self.clock.set_speed(multiplier)
+        self._notify_state_listeners()
 
     def set_earth_speed(self, multiplier: float) -> None:
         self.earth_speed = max(0.0, float(multiplier))
 
     def reset(self) -> None:
-        self.start_time = time.perf_counter()
+        self.clock.reset()
         self.earth_rotation = 0.0
         self.camera_yaw = 0.0
         self.camera_pitch = math.radians(18)
-        self.orbit_speed = 1.0
         self.earth_speed = 1.0
         self.accuracy_history = ()
         self.accuracy_history_station = None
+        self._draw_scene()
+        self._notify_state_listeners()
 
     def satellite_data(self) -> list[dict[str, float | int]]:
-        elapsed = time.perf_counter() - self.start_time
+        elapsed = self.clock.state().simulation_seconds
         return [
             {
                 "id": sat.sat_id,
                 "inclination_degrees": round(math.degrees(sat.inclination), 2),
                 "longitude_of_ascending_node_degrees": round(math.degrees(sat.node), 2),
                 "orbital_angle_degrees": round(
-                    math.degrees(sat.phase + elapsed * sat.speed * self.orbit_speed) % 360, 2
+                    math.degrees(sat.phase + elapsed * sat.speed) % 360, 2
                 ),
             }
             for sat in self.satellites
@@ -1627,7 +1673,7 @@ class EarthVisualizer(tk.Canvas):
                 inclination_degrees=math.degrees(sat.inclination),
                 longitude_of_ascending_node_degrees=math.degrees(sat.node),
                 orbital_angle_degrees=math.degrees(
-                    sat.phase + elapsed * sat.speed * self.orbit_speed
+                    sat.phase + elapsed * sat.speed
                 ),
             )
             for sat in self.satellites
@@ -1662,14 +1708,14 @@ class EarthVisualizer(tk.Canvas):
             ]
             self._draw_curve(points, radius, "#526d7e")
 
-        elapsed = time.perf_counter() - self.start_time
+        elapsed = self.clock.state().simulation_seconds
         self.projected_satellites = []
         draw_order: list[tuple[float, float, float, Satellite]] = []
         projected_satellites_by_id: dict[int, tuple[float, float, float]] = {}
         for sat in self.satellites:
             orbit = [self._orbit_point(sat, index * math.pi / 64) for index in range(129)]
             self._draw_curve(orbit, radius, ORBIT, 1.0, (3, 5))
-            angle = sat.phase + elapsed * sat.speed * self.orbit_speed
+            angle = sat.phase + elapsed * sat.speed
             sx, sy, sz = self._project(self._orbit_point(sat, angle), radius)
             draw_order.append((sz, sx, sy, sat))
             projected_satellites_by_id[sat.sat_id] = (sx, sy, sz)
@@ -2267,9 +2313,12 @@ class EarthVisualizer(tk.Canvas):
         now = time.perf_counter()
         elapsed = min(0.1, now - self.last_frame_time)
         self.last_frame_time = now
-        if self.running:
+        clock_was_playing = self.clock.is_playing
+        self.clock.tick(now)
+        if clock_was_playing:
             self.earth_rotation += elapsed * (math.tau / 86164) * self.earth_speed
             self._draw_scene()
+            self._notify_state_listeners()
         self.after(33, self._animate)
 
     def _on_motion(self, event: tk.Event) -> None:
@@ -2331,6 +2380,8 @@ class PythonHighlighter:
             ("sim_function", re.compile(
                 r"\b(?:get_satellite_states|get_satellite_count|"
                 r"set_orbital_time_scale|set_earth_rotation_scale|reset_simulation|"
+                r"play_simulation|pause_simulation|step_simulation|"
+                r"set_simulation_time|get_simulation_time|"
                 r"orbital_to_eci|eci_to_ecef|ecef_to_eci|station_to_ecef|"
                 r"ecef_to_local_horizon|local_horizon_to_ecef)\b"
             )),
@@ -2595,6 +2646,10 @@ class OrbitStudio(tk.Tk):
 
         self.visualizer = EarthVisualizer(left.body)
         self.visualizer.pack(fill="both", expand=True)
+        self._build_simulation_controls(left.body)
+        self.visualizer.add_state_listener(
+            lambda: self._refresh_simulation_controls(reschedule=False)
+        )
 
         right.body.grid_rowconfigure(1, weight=1)
         right.body.grid_columnconfigure(0, weight=1)
@@ -2674,6 +2729,180 @@ class OrbitStudio(tk.Tk):
         self.bind("<Control-s>", lambda _event: self.save_script())
         self.bind("<Control-o>", lambda _event: self.open_script())
         self.bind("<F5>", lambda _event: self.run_code())
+        self.after(250, self._refresh_simulation_controls)
+
+    def _build_simulation_controls(self, parent: tk.Misc) -> None:
+        controls = tk.Frame(parent, bg=PANEL)
+        controls.pack(fill="x", padx=8, pady=(8, 6))
+
+        self.play_pause_button = RoundedButton(
+            controls,
+            text="Pause",
+            command=self.toggle_simulation_playback,
+            width=64,
+            height=28,
+        )
+        self.play_pause_button.pack(side="left", padx=(0, 6))
+        RoundedButton(
+            controls,
+            text="Step",
+            command=lambda: self.step_simulation(60.0),
+            width=56,
+            height=28,
+        ).pack(side="left", padx=(0, 12))
+
+        tk.Label(
+            controls,
+            text="Time",
+            bg=PANEL,
+            fg=MUTED,
+            font=("Segoe UI", 8, "bold"),
+        ).pack(side="left", padx=(0, 4))
+        self.simulation_time_var = tk.StringVar(value="00:00:00")
+        self.simulation_time_entry = tk.Entry(
+            controls,
+            textvariable=self.simulation_time_var,
+            width=9,
+            bg="#202224",
+            fg=TEXT,
+            insertbackground=TEXT,
+            relief="flat",
+            justify="center",
+            font=("Cascadia Mono", 9),
+        )
+        self.simulation_time_entry.pack(side="left", padx=(0, 10), ipady=4)
+        self.simulation_time_entry.bind(
+            "<Return>",
+            lambda _event: self.apply_simulation_time_entry(),
+        )
+        self.simulation_time_entry.bind(
+            "<FocusOut>",
+            lambda _event: self.apply_simulation_time_entry(),
+        )
+
+        tk.Label(
+            controls,
+            text="Speed",
+            bg=PANEL,
+            fg=MUTED,
+            font=("Segoe UI", 8, "bold"),
+        ).pack(side="left", padx=(0, 4))
+        self.simulation_speed_var = tk.StringVar(value="1")
+        self.simulation_speed = tk.Spinbox(
+            controls,
+            from_=0.0,
+            to=120.0,
+            increment=0.5,
+            width=5,
+            textvariable=self.simulation_speed_var,
+            command=self.apply_simulation_speed_entry,
+            bg="#202224",
+            fg=TEXT,
+            insertbackground=TEXT,
+            buttonbackground="#34383b",
+            relief="flat",
+            justify="center",
+            font=("Cascadia Mono", 9),
+        )
+        self.simulation_speed.pack(side="left", ipady=4)
+        tk.Label(
+            controls,
+            text="x",
+            bg=PANEL,
+            fg=MUTED,
+            font=("Segoe UI", 9),
+        ).pack(side="left", padx=(3, 0))
+        self.simulation_speed.bind(
+            "<Return>",
+            lambda _event: self.apply_simulation_speed_entry(),
+        )
+        self.simulation_speed.bind(
+            "<FocusOut>",
+            lambda _event: self.apply_simulation_speed_entry(),
+        )
+
+    def toggle_simulation_playback(self) -> None:
+        self.visualizer.toggle_playback()
+        self._refresh_simulation_controls(reschedule=False)
+
+    def step_simulation(self, seconds: float) -> None:
+        self.visualizer.step(seconds)
+        self._refresh_simulation_controls(reschedule=False)
+
+    def apply_simulation_time_entry(self) -> None:
+        try:
+            seconds = self._parse_simulation_time(self.simulation_time_var.get())
+        except ValueError:
+            self._refresh_simulation_controls(reschedule=False)
+            return
+        self.visualizer.set_simulation_time(seconds)
+        self._refresh_simulation_controls(reschedule=False)
+
+    def apply_simulation_speed_entry(self) -> None:
+        raw = self.simulation_speed_var.get().strip().lower().removesuffix("x")
+        try:
+            multiplier = float(raw)
+        except ValueError:
+            self._refresh_simulation_controls(reschedule=False)
+            return
+        if multiplier < 0.0:
+            self._refresh_simulation_controls(reschedule=False)
+            return
+        self.visualizer.set_orbit_speed(multiplier)
+        self._refresh_simulation_controls(reschedule=False)
+
+    def _refresh_simulation_controls(self, reschedule: bool = True) -> None:
+        if not hasattr(self, "simulation_time_var"):
+            return
+        if self.focus_get() is not self.simulation_time_entry:
+            self.simulation_time_var.set(
+                self._format_simulation_time(self.visualizer.clock.simulation_seconds)
+            )
+        if self.focus_get() is not self.simulation_speed:
+            self.simulation_speed_var.set(
+                self._format_speed(self.visualizer.clock.speed_multiplier)
+            )
+        self.play_pause_button.set_text(
+            "Pause" if self.visualizer.clock.is_playing else "Play"
+        )
+        if reschedule:
+            self.after(250, self._refresh_simulation_controls)
+
+    @staticmethod
+    def _format_simulation_time(seconds: float) -> str:
+        total_seconds = max(0, int(round(seconds)))
+        hours, remainder = divmod(total_seconds, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+
+    @staticmethod
+    def _format_speed(multiplier: float) -> str:
+        if multiplier.is_integer():
+            return f"{int(multiplier)}"
+        return f"{multiplier:g}"
+
+    @staticmethod
+    def _parse_simulation_time(value: str) -> float:
+        value = value.strip()
+        if not value:
+            raise ValueError("simulation time is required")
+        if ":" not in value:
+            seconds = float(value)
+            if seconds < 0.0:
+                raise ValueError("simulation time must be non-negative")
+            return seconds
+        parts = value.split(":")
+        if len(parts) > 3:
+            raise ValueError("simulation time must be seconds, MM:SS, or HH:MM:SS")
+        numbers = [int(part) for part in parts]
+        if any(number < 0 for number in numbers):
+            raise ValueError("simulation time must be non-negative")
+        while len(numbers) < 3:
+            numbers.insert(0, 0)
+        hours, minutes, seconds = numbers
+        if minutes >= 60 or seconds >= 60:
+            raise ValueError("minutes and seconds must be below 60")
+        return float(hours * 3600 + minutes * 60 + seconds)
 
     def _delete_previous_word(self, _event: tk.Event) -> str:
         if self.editor.tag_ranges("sel"):

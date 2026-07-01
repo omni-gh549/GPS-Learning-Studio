@@ -7,6 +7,7 @@ from tempfile import TemporaryDirectory
 from app import (
     DOCUMENTATION_PAGES,
     DocumentationProgress,
+    OrbitStudio,
     documentation_page_marker,
     evaluate_documentation_challenge,
     learning_path_completion_summary,
@@ -80,6 +81,28 @@ class DocumentationTests(unittest.TestCase):
 
         self.assertEqual(2, complete)
         self.assertEqual(4, total)
+
+    def test_dynamics_api_documents_playback_controls(self) -> None:
+        page = next(page for page in DOCUMENTATION_PAGES if page.title == "Dynamics API")
+        content = "\n".join(
+            (page.title, page.eyebrow, page.summary)
+            + tuple(text for section in page.sections for text in section)
+        )
+
+        self.assertIn("play_simulation", content)
+        self.assertIn("pause_simulation", content)
+        self.assertIn("step_simulation", content)
+        self.assertIn("set_simulation_time", content)
+        self.assertIn("get_simulation_time", content)
+        self.assertIn("set_orbital_time_scale", content)
+
+    def test_simulation_time_display_helpers_are_headless(self) -> None:
+        self.assertEqual("01:01:01", OrbitStudio._format_simulation_time(3661.0))
+        self.assertEqual(90.0, OrbitStudio._parse_simulation_time("01:30"))
+        self.assertEqual(3661.0, OrbitStudio._parse_simulation_time("01:01:01"))
+        self.assertEqual(42.5, OrbitStudio._parse_simulation_time("42.5"))
+        with self.assertRaisesRegex(ValueError, "below 60"):
+            OrbitStudio._parse_simulation_time("00:61")
 
     def test_documentation_progress_round_trips_locally(self) -> None:
         with TemporaryDirectory() as directory:
