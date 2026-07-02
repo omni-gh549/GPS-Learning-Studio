@@ -34,6 +34,8 @@ from gps_sim.scenario_parameters import (
 )
 from gps_sim.scenarios import (
     VersionedScenario,
+    get_example_scenario,
+    list_example_scenarios,
     load_scenario_file,
     save_scenario_file,
 )
@@ -78,6 +80,7 @@ SIMULATOR_COMPLETIONS = (
     ("import gps_sim.positioning as positioning", "import gps_sim.positioning as positioning", "#8eb6d8"),
     ("import gps_sim.scenario_parameters as scenario_parameters", "import gps_sim.scenario_parameters as scenario_parameters", "#8eb6d8"),
     ("import gps_sim.scenarios as scenarios", "import gps_sim.scenarios as scenarios", "#8eb6d8"),
+    ("scenarios.list_example_scenarios()", "scenarios.list_example_scenarios()", "#7db6a6"),
     ("import gps_sim.visibility as visibility", "import gps_sim.visibility as visibility", "#8eb6d8"),
     ("constellation.get_satellite_states()  -> list[dict]", "constellation.get_satellite_states()", "#7db6a6"),
     ("constellation.get_satellite_count()  -> int", "constellation.get_satellite_count()", "#7db6a6"),
@@ -473,6 +476,8 @@ DOCUMENTATION_PAGES = (
         (
             ("Import", "import gps_sim.scenario_parameters as scenario_parameters\nimport gps_sim.scenarios as scenarios"),
             ("VersionedScenario(...)", "scenario = scenarios.VersionedScenario(\n    constellation=scenario_parameters.ConstellationParameters(satellite_count=6),\n    receiver=scenario_parameters.ReceiverParameters(clock_bias_microseconds=2.0),\n    simulation_time_seconds=600.0,\n    orbital_speed_multiplier=10.0,\n)\n\nA scenario captures the editable constellation, receiver, simulation timestamp, and orbital speed multiplier needed to reproduce a classroom starting state."),
+            ("list_example_scenarios()", "for example in scenarios.list_example_scenarios():\n    print(example.name, example.description)\n\nThe bundled examples cover strong geometry, poor geometry, clock bias, atmospheric delay, and multipath labs. Each example provides a validated VersionedScenario and optional focus_error_sources for the matching Errors API experiment."),
+            ("get_example_scenario(...)", "example = scenarios.get_example_scenario(\"clock_bias\")\nscenario = example.scenario\nprint(scenario.receiver.clock_bias_microseconds)\n\nUse a key such as strong_geometry, poor_geometry, clock_bias, atmospheric_delay, or multipath to load the same classroom starting point from code or the visualizer."),
             ("save_scenario_file(...)", "scenarios.save_scenario_file(path, scenario)\n\nWrites a formatted `.gps-scenario.json` file with an explicit schema_version field so future releases can migrate saved labs deliberately."),
             ("load_scenario_file(...)", "loaded = scenarios.load_scenario_file(path)\n\nLoads only supported schema versions and validates every constellation and receiver field before the visualizer applies the state. Invalid files raise ValueError with a focused message."),
         ),
@@ -495,7 +500,7 @@ DOCUMENTATION_PAGES = (
             ("Camera", "Hold the left mouse button and drag to rotate the view around Earth."),
             ("Satellites", "Hover a satellite marker to display its Globalstar ID. Each colored marker follows its own inclined orbital plane."),
             ("Ground stations", "Orange markers show named stations. Click a front-facing marker to select it and inspect the live azimuth, elevation, range, and visibility table. Green dashed links connect stations to satellites at or above the elevation mask."),
-            ("Editable scenario", "Use the visualizer controls to change satellite count, inclination, orbital altitude, receiver latitude, receiver longitude, elevation mask, and receiver clock bias. Applying changes redraws the constellation and receiver fix. Save writes a versioned scenario file; Load validates one and restores the constellation, receiver, simulation time, and orbital speed."),
+            ("Editable scenario", "Use the visualizer controls to change satellite count, inclination, orbital altitude, receiver latitude, receiver longitude, elevation mask, and receiver clock bias. Applying changes redraws the constellation and receiver fix. Example loads bundled classroom scenarios for strong geometry, poor geometry, clock bias, atmospheric delay, and multipath. Save writes a versioned scenario file; Load validates one and restores the constellation, receiver, simulation time, and orbital speed."),
             ("Measurement links", "Amber dashed links show the selected receiver's simplified pseudorange measurements to the satellites used by the position-fix display. Brighter amber means the satellite is above the station elevation mask; muted amber keeps below-mask observations visible for comparison."),
             ("Position fix", "The selected station also drives a simulated pseudorange fix. The receiver panel compares the true station position with the estimated position, clock bias, residual statistics, horizontal error, vertical error, and 3D error; a dashed yellow ring marks the estimated receiver on Earth."),
             ("Accuracy comparison", "The accuracy panel compares a clean before fix with an after fix that applies the seeded classroom error model, then plots both 3D position errors over time so students can see the error source change the solution."),
@@ -2974,6 +2979,41 @@ class OrbitStudio(tk.Tk):
             width=58,
             height=28,
         ).pack(side="left", padx=(4, 8))
+        examples = list_example_scenarios()
+        self.example_scenario_by_name = {
+            example.name: example for example in examples
+        }
+        self.example_scenario_var = tk.StringVar(value=examples[0].name)
+        example_menu = tk.OptionMenu(
+            controls,
+            self.example_scenario_var,
+            *(example.name for example in examples),
+        )
+        example_menu.configure(
+            bg="#202224",
+            fg=TEXT,
+            activebackground="#34383b",
+            activeforeground=TEXT,
+            highlightthickness=0,
+            relief="flat",
+            width=15,
+            font=("Segoe UI", 8),
+        )
+        example_menu["menu"].configure(
+            bg="#202224",
+            fg=TEXT,
+            activebackground="#34383b",
+            activeforeground=TEXT,
+            relief="flat",
+        )
+        example_menu.pack(side="left", padx=(0, 4))
+        RoundedButton(
+            controls,
+            text="Example",
+            command=self.load_example_scenario,
+            width=70,
+            height=28,
+        ).pack(side="left", padx=(0, 8))
         RoundedButton(
             controls,
             text="Save",
@@ -3050,6 +3090,18 @@ class OrbitStudio(tk.Tk):
         self.scenario_status_var.set(
             f"{constellation.satellite_count} satellites, receiver {receiver.latitude_degrees:g}/{receiver.longitude_degrees:g}"
         )
+
+    def load_example_scenario(self) -> None:
+        name = self.example_scenario_var.get()
+        example = self.example_scenario_by_name.get(name)
+        if example is None:
+            self.scenario_status_var.set(f"Unknown example {name}")
+            return
+        loaded = get_example_scenario(example.key)
+        self.visualizer.load_scenario(loaded.scenario)
+        self._sync_scenario_entry_vars()
+        self._refresh_simulation_controls(reschedule=False)
+        self.scenario_status_var.set(f"Loaded example: {loaded.name}")
 
     def save_scenario(self) -> None:
         filename = filedialog.asksaveasfilename(

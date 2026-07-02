@@ -73,6 +73,8 @@ Visualizer controls:
 - Edit Sats, Incl, and Alt km to regenerate the active classroom constellation
 - Edit Lat, Lon, Mask, and Clock us to move the receiver and change its
   pseudorange clock bias
+- Choose an Example scenario to load bundled labs for strong geometry, poor
+  geometry, clock bias, atmospheric delay, and multipath
 - Use Save and Load in the scenario controls to write or restore a versioned
   `.gps-scenario.json` file with constellation, receiver, simulation time, and
   orbital speed
@@ -160,6 +162,10 @@ no_multipath = error_model.with_source_settings("multipath", enabled=False)
 print(ionosphere_lab.sample("Aberdeen-SV01").by_source()["ionospheric_delay"])
 print(no_multipath.sample("Aberdeen-SV01").by_source()["multipath"])
 print(error_model.apply_to_pseudorange(reading.pseudorange_meters, "Aberdeen-SV01"))
+for example in scenarios.list_example_scenarios():
+    print(example.key, example.name, example.focus_error_sources)
+clock_bias_lab = scenarios.get_example_scenario("clock_bias").scenario
+print(clock_bias_lab.receiver.clock_bias_microseconds)
 observation = positioning.PseudorangeObservation(
     satellite_ecef=ecef,
     pseudorange_meters=reading.pseudorange_meters,
@@ -222,7 +228,10 @@ Each file stores the editable constellation, receiver, simulation timestamp,
 and orbital speed multiplier. Loading a file validates every value before it
 changes the visualizer, so unsupported schema versions, missing sections, and
 out-of-range classroom inputs produce actionable messages instead of partial
-state changes.
+state changes. It also ships bundled example scenarios for strong geometry,
+poor geometry, clock bias, atmospheric delay, and multipath. These examples
+are available through `list_example_scenarios()` and `get_example_scenario()`
+and can be loaded from the visualizer's scenario controls.
 The visualizer starts with an Aberdeen station using a 5-degree elevation mask
 and automatically redraws markers and links when stations are created, updated,
 or removed in the editor. Click any front-facing station marker to select it;

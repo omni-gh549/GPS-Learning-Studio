@@ -9,6 +9,8 @@ from gps_sim.scenario_parameters import ConstellationParameters, ReceiverParamet
 from gps_sim.scenarios import (
     SCENARIO_SCHEMA_VERSION,
     VersionedScenario,
+    get_example_scenario,
+    list_example_scenarios,
     load_scenario_file,
     save_scenario_file,
     scenario_from_payload,
@@ -85,6 +87,47 @@ class ScenarioFileTests(unittest.TestCase):
 
             with self.assertRaisesRegex(ValueError, "invalid scenario JSON"):
                 load_scenario_file(path)
+
+    def test_bundled_examples_cover_required_labs(self) -> None:
+        examples = list_example_scenarios()
+
+        self.assertEqual(
+            [
+                "strong_geometry",
+                "poor_geometry",
+                "clock_bias",
+                "atmospheric_delay",
+                "multipath",
+            ],
+            [example.key for example in examples],
+        )
+        self.assertIn(
+            "receiver_clock",
+            get_example_scenario("clock_bias").focus_error_sources,
+        )
+        self.assertIn(
+            "ionospheric_delay",
+            get_example_scenario("atmospheric_delay").focus_error_sources,
+        )
+        self.assertIn(
+            "tropospheric_delay",
+            get_example_scenario("atmospheric_delay").focus_error_sources,
+        )
+        self.assertIn("multipath", get_example_scenario("multipath").focus_error_sources)
+
+    def test_bundled_examples_are_valid_versioned_scenarios(self) -> None:
+        for example in list_example_scenarios():
+            with self.subTest(example=example.key):
+                payload = scenario_to_payload(example.scenario)
+                restored = scenario_from_payload(payload)
+
+                self.assertEqual(example.scenario, restored)
+                self.assertGreaterEqual(example.scenario.constellation.satellite_count, 4)
+                self.assertTrue(example.description)
+
+    def test_rejects_unknown_example_scenario(self) -> None:
+        with self.assertRaisesRegex(ValueError, "unknown example scenario"):
+            get_example_scenario("not-a-scenario")
 
 
 if __name__ == "__main__":
