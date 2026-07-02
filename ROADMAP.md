@@ -124,7 +124,7 @@ Make experiments easier to set up, repeat, and share.
 
 - [x] Add play, pause, step, simulation-time, and speed controls.
 - [x] Allow constellation and receiver parameters to be edited in the UI.
-- [ ] Save and load versioned scenario files.
+- [x] Save and load versioned scenario files.
 - [ ] Ship example scenarios for strong geometry, poor geometry, clock bias,
   atmospheric delay, and multipath.
 - [ ] Add a reset-to-lesson-state action.

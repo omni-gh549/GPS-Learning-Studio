@@ -15,6 +15,7 @@ a = Analysis(
         "gps_sim.positioning",
         "gps_sim.runtime",
         "gps_sim.scenario_parameters",
+        "gps_sim.scenarios",
         "gps_sim.visibility",
         "gps_sim.visualization",
     ],

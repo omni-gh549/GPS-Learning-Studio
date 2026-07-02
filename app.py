@@ -32,6 +32,11 @@ from gps_sim.scenario_parameters import (
     SatelliteParameters,
     build_satellite_parameters,
 )
+from gps_sim.scenarios import (
+    VersionedScenario,
+    load_scenario_file,
+    save_scenario_file,
+)
 from gps_sim.simulation_time import SimulationClock
 from gps_sim.updater import CURRENT_VERSION, download_and_install, find_update, is_packaged
 from gps_sim.visualization import (
@@ -72,6 +77,7 @@ SIMULATOR_COMPLETIONS = (
     ("import gps_sim.measurements as measurements", "import gps_sim.measurements as measurements", "#8eb6d8"),
     ("import gps_sim.positioning as positioning", "import gps_sim.positioning as positioning", "#8eb6d8"),
     ("import gps_sim.scenario_parameters as scenario_parameters", "import gps_sim.scenario_parameters as scenario_parameters", "#8eb6d8"),
+    ("import gps_sim.scenarios as scenarios", "import gps_sim.scenarios as scenarios", "#8eb6d8"),
     ("import gps_sim.visibility as visibility", "import gps_sim.visibility as visibility", "#8eb6d8"),
     ("constellation.get_satellite_states()  -> list[dict]", "constellation.get_satellite_states()", "#7db6a6"),
     ("constellation.get_satellite_count()  -> int", "constellation.get_satellite_count()", "#7db6a6"),
@@ -461,6 +467,17 @@ DOCUMENTATION_PAGES = (
         ),
     ),
     DocumentationPage(
+        "Scenario files API",
+        "API REFERENCE",
+        "Save and load versioned classroom scenario files.",
+        (
+            ("Import", "import gps_sim.scenario_parameters as scenario_parameters\nimport gps_sim.scenarios as scenarios"),
+            ("VersionedScenario(...)", "scenario = scenarios.VersionedScenario(\n    constellation=scenario_parameters.ConstellationParameters(satellite_count=6),\n    receiver=scenario_parameters.ReceiverParameters(clock_bias_microseconds=2.0),\n    simulation_time_seconds=600.0,\n    orbital_speed_multiplier=10.0,\n)\n\nA scenario captures the editable constellation, receiver, simulation timestamp, and orbital speed multiplier needed to reproduce a classroom starting state."),
+            ("save_scenario_file(...)", "scenarios.save_scenario_file(path, scenario)\n\nWrites a formatted `.gps-scenario.json` file with an explicit schema_version field so future releases can migrate saved labs deliberately."),
+            ("load_scenario_file(...)", "loaded = scenarios.load_scenario_file(path)\n\nLoads only supported schema versions and validates every constellation and receiver field before the visualizer applies the state. Invalid files raise ValueError with a focused message."),
+        ),
+    ),
+    DocumentationPage(
         "Editor and files",
         "WORKSPACE GUIDE",
         "Use the editor like a small Python lab built around the simulation.",
@@ -478,7 +495,7 @@ DOCUMENTATION_PAGES = (
             ("Camera", "Hold the left mouse button and drag to rotate the view around Earth."),
             ("Satellites", "Hover a satellite marker to display its Globalstar ID. Each colored marker follows its own inclined orbital plane."),
             ("Ground stations", "Orange markers show named stations. Click a front-facing marker to select it and inspect the live azimuth, elevation, range, and visibility table. Green dashed links connect stations to satellites at or above the elevation mask."),
-            ("Editable scenario", "Use the visualizer controls to change satellite count, inclination, orbital altitude, receiver latitude, receiver longitude, elevation mask, and receiver clock bias. Applying changes redraws the constellation and receiver fix without saving a scenario file."),
+            ("Editable scenario", "Use the visualizer controls to change satellite count, inclination, orbital altitude, receiver latitude, receiver longitude, elevation mask, and receiver clock bias. Applying changes redraws the constellation and receiver fix. Save writes a versioned scenario file; Load validates one and restores the constellation, receiver, simulation time, and orbital speed."),
             ("Measurement links", "Amber dashed links show the selected receiver's simplified pseudorange measurements to the satellites used by the position-fix display. Brighter amber means the satellite is above the station elevation mask; muted amber keeps below-mask observations visible for comparison."),
             ("Position fix", "The selected station also drives a simulated pseudorange fix. The receiver panel compares the true station position with the estimated position, clock bias, residual statistics, horizontal error, vertical error, and 3D error; a dashed yellow ring marks the estimated receiver on Earth."),
             ("Accuracy comparison", "The accuracy panel compares a clean before fix with an after fix that applies the seeded classroom error model, then plots both 3D position errors over time so students can see the error source change the solution."),
@@ -1564,6 +1581,25 @@ class EarthVisualizer(tk.Canvas):
         self.satellites = self._build_satellites(constellation)
         self.accuracy_history = ()
         self.accuracy_history_station = None
+        self._draw_scene()
+        self._notify_state_listeners()
+
+    def export_scenario(self) -> VersionedScenario:
+        return VersionedScenario(
+            constellation=self.constellation_parameters,
+            receiver=self.receiver_parameters,
+            simulation_time_seconds=self.clock.simulation_seconds,
+            orbital_speed_multiplier=self.clock.speed_multiplier,
+        )
+
+    def load_scenario(self, scenario: VersionedScenario) -> None:
+        self.apply_scenario_parameters(
+            scenario.constellation,
+            scenario.receiver,
+        )
+        wall_time = time.perf_counter()
+        self.clock.set_time(scenario.simulation_time_seconds, wall_time)
+        self.clock.set_speed(scenario.orbital_speed_multiplier, wall_time)
         self._draw_scene()
         self._notify_state_listeners()
 
@@ -2938,6 +2974,20 @@ class OrbitStudio(tk.Tk):
             width=58,
             height=28,
         ).pack(side="left", padx=(4, 8))
+        RoundedButton(
+            controls,
+            text="Save",
+            command=self.save_scenario,
+            width=54,
+            height=28,
+        ).pack(side="left", padx=(0, 4))
+        RoundedButton(
+            controls,
+            text="Load",
+            command=self.load_scenario_from_file,
+            width=54,
+            height=28,
+        ).pack(side="left", padx=(0, 8))
         self.scenario_status_var = tk.StringVar(value="")
         tk.Label(
             controls,
@@ -3000,6 +3050,59 @@ class OrbitStudio(tk.Tk):
         self.scenario_status_var.set(
             f"{constellation.satellite_count} satellites, receiver {receiver.latitude_degrees:g}/{receiver.longitude_degrees:g}"
         )
+
+    def save_scenario(self) -> None:
+        filename = filedialog.asksaveasfilename(
+            defaultextension=".gps-scenario.json",
+            filetypes=[
+                ("GPS scenario", "*.gps-scenario.json"),
+                ("JSON", "*.json"),
+                ("All files", "*.*"),
+            ],
+        )
+        if not filename:
+            return
+        try:
+            save_scenario_file(Path(filename), self.visualizer.export_scenario())
+        except (OSError, ValueError) as error:
+            messagebox.showerror("Save scenario", str(error))
+            return
+        self.scenario_status_var.set(f"Saved {Path(filename).name}")
+
+    def load_scenario_from_file(self) -> None:
+        filename = filedialog.askopenfilename(
+            filetypes=[
+                ("GPS scenario", "*.gps-scenario.json"),
+                ("JSON", "*.json"),
+                ("All files", "*.*"),
+            ],
+        )
+        if not filename:
+            return
+        try:
+            scenario = load_scenario_file(Path(filename))
+        except ValueError as error:
+            messagebox.showerror("Load scenario", str(error))
+            return
+        self.visualizer.load_scenario(scenario)
+        self._sync_scenario_entry_vars()
+        self._refresh_simulation_controls(reschedule=False)
+        self.scenario_status_var.set(f"Loaded {Path(filename).name}")
+
+    def _sync_scenario_entry_vars(self) -> None:
+        constellation = self.visualizer.constellation_parameters
+        receiver = self.visualizer.receiver_parameters
+        self.constellation_count_var.set(str(constellation.satellite_count))
+        self.constellation_inclination_var.set(
+            self._format_speed(constellation.inclination_degrees)
+        )
+        self.constellation_altitude_var.set(
+            self._format_speed(constellation.altitude_kilometers)
+        )
+        self.receiver_latitude_var.set(f"{receiver.latitude_degrees:g}")
+        self.receiver_longitude_var.set(f"{receiver.longitude_degrees:g}")
+        self.receiver_mask_var.set(f"{receiver.minimum_elevation_degrees:g}")
+        self.receiver_clock_var.set(f"{receiver.clock_bias_microseconds:g}")
 
     def toggle_simulation_playback(self) -> None:
         self.visualizer.toggle_playback()

@@ -479,7 +479,25 @@ class DocumentationTests(unittest.TestCase):
         self.assertIn("before", content.lower())
         self.assertIn("after", content.lower())
         self.assertIn("over time", content.lower())
+        self.assertIn("scenario file", content.lower())
+        self.assertIn("simulation time", content.lower())
         self.assertIn("Amber", content)
+
+    def test_scenario_files_api_documents_versioned_save_load(self) -> None:
+        page = next(
+            page for page in DOCUMENTATION_PAGES if page.title == "Scenario files API"
+        )
+        content = "\n".join(
+            (page.title, page.eyebrow, page.summary)
+            + tuple(text for section in page.sections for text in section)
+        )
+
+        self.assertIn("gps_sim.scenarios", content)
+        self.assertIn("VersionedScenario", content)
+        self.assertIn("save_scenario_file", content)
+        self.assertIn("load_scenario_file", content)
+        self.assertIn("schema_version", content)
+        self.assertIn("simulation timestamp", content.lower())
 
 
 if __name__ == "__main__":

@@ -73,6 +73,9 @@ Visualizer controls:
 - Edit Sats, Incl, and Alt km to regenerate the active classroom constellation
 - Edit Lat, Lon, Mask, and Clock us to move the receiver and change its
   pseudorange clock bias
+- Use Save and Load in the scenario controls to write or restore a versioned
+  `.gps-scenario.json` file with constellation, receiver, simulation time, and
+  orbital speed
 - Hold the left mouse button and drag to rotate the camera
 - Hover a satellite dot to show its Globalstar ID
 - Orange markers show named ground stations
@@ -102,6 +105,7 @@ import gps_sim.ground_stations as ground_stations
 import gps_sim.measurements as measurements
 import gps_sim.positioning as positioning
 import gps_sim.scenario_parameters as scenario_parameters
+import gps_sim.scenarios as scenarios
 import gps_sim.visibility as visibility
 
 print(constellation.get_satellite_states())
@@ -213,6 +217,12 @@ unknowns at once: three Earth-fixed position coordinates plus receiver clock
 bias. Each pseudorange contributes one distance equation, so a fourth
 independent satellite lets the solver estimate clock bias instead of pretending
 the receiver clock is already synchronized.
+The scenarios module saves and loads versioned `.gps-scenario.json` files.
+Each file stores the editable constellation, receiver, simulation timestamp,
+and orbital speed multiplier. Loading a file validates every value before it
+changes the visualizer, so unsupported schema versions, missing sections, and
+out-of-range classroom inputs produce actionable messages instead of partial
+state changes.
 The visualizer starts with an Aberdeen station using a 5-degree elevation mask
 and automatically redraws markers and links when stations are created, updated,
 or removed in the editor. Click any front-facing station marker to select it;
