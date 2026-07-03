@@ -80,6 +80,9 @@ Visualizer controls:
 - Use Save and Load in the scenario controls to write or restore a versioned
   `.gps-scenario.json` file with constellation, receiver, simulation time, and
   orbital speed
+- Use Export in the scenario controls to write selected-station telemetry,
+  pseudorange measurements, position-fix metrics, and accuracy results as JSON
+  or CSV with units and simulation timestamps
 - Hold the left mouse button and drag to rotate the camera
 - Hover a satellite dot to show its Globalstar ID
 - Orange markers show named ground stations
@@ -101,10 +104,13 @@ demonstration, paused inspection, or repeatable timestamp is useful.
 Import the module required by the functions you use:
 
 ```python
+from pathlib import Path
+
 import gps_sim.constellation as constellation
 import gps_sim.coordinates as coordinates
 import gps_sim.dynamics as dynamics
 import gps_sim.errors as errors
+import gps_sim.exports as exports
 import gps_sim.ground_stations as ground_stations
 import gps_sim.measurements as measurements
 import gps_sim.positioning as positioning
@@ -190,6 +196,13 @@ if len(observations) >= 4:
     print(report.horizontal_error_meters, report.vertical_error_meters)
     print(report.position_error_meters)
     print(dop.gdop, dop.pdop, dop.hdop, dop.vdop)
+
+# The visualizer's Export button builds this payload from the active scene.
+# Code can use the same module with a headless GroundStationScene and accuracy
+# comparison from gps_sim.visualization.
+# payload = exports.build_telemetry_export(scene, 600.0, 0.000001, comparison)
+# exports.save_telemetry_export_json(Path("lab.gps-telemetry.json"), payload)
+# exports.save_telemetry_export_csv(Path("lab.csv"), payload)
 ```
 
 `GroundStation` validates latitude, longitude, altitude, and elevation-mask
@@ -235,6 +248,12 @@ poor geometry, clock bias, atmospheric delay, and multipath. These examples
 are available through `list_example_scenarios()` and `get_example_scenario()`
 and can be loaded from the visualizer's scenario controls or from a lesson's
 Lesson state action.
+The exports module writes the live classroom data students need for lab
+records: selected-station metadata, simulation timestamps, units, visibility
+rows, pseudorange measurements, clean position-fix metrics, seeded before/after
+accuracy results, and rolling 3D error-history samples. JSON keeps the nested
+experiment structure intact, while CSV flattens the same data into metric rows
+for spreadsheets.
 The visualizer starts with an Aberdeen station using a 5-degree elevation mask
 and automatically redraws markers and links when stations are created, updated,
 or removed in the editor. Click any front-facing station marker to select it;

@@ -128,7 +128,7 @@ Make experiments easier to set up, repeat, and share.
 - [x] Ship example scenarios for strong geometry, poor geometry, clock bias,
   atmospheric delay, and multipath.
 - [x] Add a reset-to-lesson-state action.
-- [ ] Export telemetry and experiment results as CSV or JSON.
+- [x] Export telemetry and experiment results as CSV or JSON.
 
 ### Acceptance criteria
 

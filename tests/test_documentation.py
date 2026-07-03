@@ -502,6 +502,9 @@ class DocumentationTests(unittest.TestCase):
         self.assertIn("after", content.lower())
         self.assertIn("over time", content.lower())
         self.assertIn("scenario file", content.lower())
+        self.assertIn("export", content.lower())
+        self.assertIn("csv", content.lower())
+        self.assertIn("units", content.lower())
         self.assertIn("simulation time", content.lower())
         self.assertIn("Amber", content)
 
@@ -528,6 +531,25 @@ class DocumentationTests(unittest.TestCase):
         self.assertIn("multipath", content.lower())
         self.assertIn("schema_version", content)
         self.assertIn("simulation timestamp", content.lower())
+
+    def test_telemetry_exports_api_documents_json_csv_and_units(self) -> None:
+        page = next(
+            page for page in DOCUMENTATION_PAGES if page.title == "Telemetry exports API"
+        )
+        content = "\n".join(
+            (page.title, page.eyebrow, page.summary)
+            + tuple(text for section in page.sections for text in section)
+        )
+
+        self.assertIn("gps_sim.exports", content)
+        self.assertIn("build_telemetry_export", content)
+        self.assertIn("save_telemetry_export_json", content)
+        self.assertIn("save_telemetry_export_csv", content)
+        self.assertIn("simulation_time_seconds", content)
+        self.assertIn("units", content.lower())
+        self.assertIn("visibility", content.lower())
+        self.assertIn("pseudorange", content.lower())
+        self.assertIn("accuracy", content.lower())
 
 
 if __name__ == "__main__":

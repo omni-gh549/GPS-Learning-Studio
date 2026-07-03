@@ -24,6 +24,11 @@ from gps_sim.coordinates import (
     WGS84_SEMI_MAJOR_AXIS_METERS,
     orbital_to_eci,
 )
+from gps_sim.exports import (
+    build_telemetry_export,
+    save_telemetry_export_csv,
+    save_telemetry_export_json,
+)
 from gps_sim.ground_stations import create_station, list_stations, update_station
 from gps_sim.runtime import bind_visualizer
 from gps_sim.scenario_parameters import (
@@ -493,6 +498,17 @@ DOCUMENTATION_PAGES = (
         ),
     ),
     DocumentationPage(
+        "Telemetry exports API",
+        "API REFERENCE",
+        "Export live telemetry and experiment results with units.",
+        (
+            ("Import", "import gps_sim.exports as exports"),
+            ("build_telemetry_export(...)", "payload = exports.build_telemetry_export(\n    scene,\n    simulation_time_seconds=600.0,\n    receiver_clock_bias_seconds=0.000001,\n    accuracy_comparison=comparison,\n    accuracy_history=history,\n)\nprint(payload[\"units\"])\nprint(payload[\"measurements\"][0][\"pseudorange_meters\"])\n\nThe payload includes schema_version, simulation_time_seconds, units, station metadata, visibility rows, pseudorange measurements, the clean position fix, before/after accuracy results, and optional error-history samples."),
+            ("save_telemetry_export_json(...)", "exports.save_telemetry_export_json(path, payload)\n\nWrites formatted JSON for notebooks or repeatable lab records. The visualizer's Export button writes the same structure when the filename ends in .json or .gps-telemetry.json."),
+            ("save_telemetry_export_csv(...)", "exports.save_telemetry_export_csv(path, payload)\n\nWrites tidy metric rows with record_type, timestamp, station, satellite, metric, value, and unit columns so spreadsheet users can filter visibility, measurement, position-fix, and accuracy-history values."),
+        ),
+    ),
+    DocumentationPage(
         "Editor and files",
         "WORKSPACE GUIDE",
         "Use the editor like a small Python lab built around the simulation.",
@@ -510,7 +526,7 @@ DOCUMENTATION_PAGES = (
             ("Camera", "Hold the left mouse button and drag to rotate the view around Earth."),
             ("Satellites", "Hover a satellite marker to display its Globalstar ID. Each colored marker follows its own inclined orbital plane."),
             ("Ground stations", "Orange markers show named stations. Click a front-facing marker to select it and inspect the live azimuth, elevation, range, and visibility table. Green dashed links connect stations to satellites at or above the elevation mask."),
-            ("Editable scenario", "Use the visualizer controls to change satellite count, inclination, orbital altitude, receiver latitude, receiver longitude, elevation mask, and receiver clock bias. Applying changes redraws the constellation and receiver fix. Example loads bundled classroom scenarios for strong geometry, poor geometry, clock bias, atmospheric delay, and multipath. Save writes a versioned scenario file; Load validates one and restores the constellation, receiver, simulation time, and orbital speed."),
+            ("Editable scenario", "Use the visualizer controls to change satellite count, inclination, orbital altitude, receiver latitude, receiver longitude, elevation mask, and receiver clock bias. Applying changes redraws the constellation and receiver fix. Example loads bundled classroom scenarios for strong geometry, poor geometry, clock bias, atmospheric delay, and multipath. Save writes a versioned scenario file; Load validates one and restores the constellation, receiver, simulation time, and orbital speed. Export writes selected-station telemetry, pseudorange measurements, position-fix metrics, and accuracy results as JSON or CSV with units and simulation timestamps."),
             ("Measurement links", "Amber dashed links show the selected receiver's simplified pseudorange measurements to the satellites used by the position-fix display. Brighter amber means the satellite is above the station elevation mask; muted amber keeps below-mask observations visible for comparison."),
             ("Position fix", "The selected station also drives a simulated pseudorange fix. The receiver panel compares the true station position with the estimated position, clock bias, residual statistics, horizontal error, vertical error, and 3D error; a dashed yellow ring marks the estimated receiver on Earth."),
             ("Accuracy comparison", "The accuracy panel compares a clean before fix with an after fix that applies the seeded classroom error model, then plots both 3D position errors over time so students can see the error source change the solution."),
@@ -1633,6 +1649,39 @@ class EarthVisualizer(tk.Canvas):
             receiver=self.receiver_parameters,
             simulation_time_seconds=self.clock.simulation_seconds,
             orbital_speed_multiplier=self.clock.speed_multiplier,
+        )
+
+    def selected_station_scene(self) -> GroundStationScene | None:
+        elapsed = self.clock.state().simulation_seconds
+        scenes = build_ground_station_scenes(
+            self._satellite_scene_states(elapsed),
+            list_stations(),
+            math.degrees(self.earth_rotation),
+        )
+        if not scenes:
+            return None
+        station_names = {scene.name for scene in scenes}
+        if self.selected_station_name not in station_names:
+            self.selected_station_name = scenes[0].name
+        return next(
+            scene for scene in scenes if scene.name == self.selected_station_name
+        )
+
+    def export_telemetry(self) -> dict[str, object] | None:
+        scene = self.selected_station_scene()
+        if scene is None:
+            return None
+        elapsed = self.clock.state().simulation_seconds
+        comparison = build_accuracy_comparison_display(
+            scene,
+            receiver_clock_bias_seconds=self.receiver_clock_bias_seconds,
+        )
+        return build_telemetry_export(
+            scene,
+            simulation_time_seconds=elapsed,
+            receiver_clock_bias_seconds=self.receiver_clock_bias_seconds,
+            accuracy_comparison=comparison,
+            accuracy_history=self.accuracy_history,
         )
 
     def load_scenario(self, scenario: VersionedScenario) -> None:
@@ -3066,6 +3115,13 @@ class OrbitStudio(tk.Tk):
             command=self.load_scenario_from_file,
             width=54,
             height=28,
+        ).pack(side="left", padx=(0, 4))
+        RoundedButton(
+            controls,
+            text="Export",
+            command=self.export_telemetry,
+            width=62,
+            height=28,
         ).pack(side="left", padx=(0, 8))
         self.scenario_status_var = tk.StringVar(value="")
         tk.Label(
@@ -3179,6 +3235,33 @@ class OrbitStudio(tk.Tk):
         self._sync_scenario_entry_vars()
         self._refresh_simulation_controls(reschedule=False)
         self.scenario_status_var.set(f"Loaded {Path(filename).name}")
+
+    def export_telemetry(self) -> None:
+        filename = filedialog.asksaveasfilename(
+            defaultextension=".gps-telemetry.json",
+            filetypes=[
+                ("GPS telemetry JSON", "*.gps-telemetry.json"),
+                ("CSV", "*.csv"),
+                ("JSON", "*.json"),
+                ("All files", "*.*"),
+            ],
+        )
+        if not filename:
+            return
+        payload = self.visualizer.export_telemetry()
+        if payload is None:
+            messagebox.showerror("Export telemetry", "No station is available to export.")
+            return
+        path = Path(filename)
+        try:
+            if path.suffix.lower() == ".csv":
+                save_telemetry_export_csv(path, payload)
+            else:
+                save_telemetry_export_json(path, payload)
+        except OSError as error:
+            messagebox.showerror("Export telemetry", str(error))
+            return
+        self.scenario_status_var.set(f"Exported {path.name}")
 
     def _sync_scenario_entry_vars(self) -> None:
         constellation = self.visualizer.constellation_parameters
