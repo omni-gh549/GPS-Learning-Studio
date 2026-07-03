@@ -12,10 +12,12 @@ from app import (
     evaluate_documentation_challenge,
     learning_path_completion_summary,
     learning_path_step_for_page,
+    lesson_scenario_for_page,
     load_documentation_progress,
     reset_documentation_progress,
     save_documentation_progress,
 )
+from gps_sim.scenarios import get_example_scenario
 
 
 class DocumentationTests(unittest.TestCase):
@@ -81,6 +83,26 @@ class DocumentationTests(unittest.TestCase):
 
         self.assertEqual(2, complete)
         self.assertEqual(4, total)
+
+    def test_milestone_lessons_define_valid_reset_scenarios(self) -> None:
+        expected_keys = {
+            "Quick start": "strong_geometry",
+            "Ground stations": "strong_geometry",
+            "Position fixes": "clock_bias",
+            "Error and accuracy": "atmospheric_delay",
+        }
+
+        for title, key in expected_keys.items():
+            with self.subTest(page=title):
+                page = next(page for page in DOCUMENTATION_PAGES if page.title == title)
+                self.assertEqual(key, page.lesson_scenario_key)
+                self.assertEqual(
+                    get_example_scenario(key).scenario,
+                    lesson_scenario_for_page(page),
+                )
+
+        reference_page = next(page for page in DOCUMENTATION_PAGES if page.title == "Welcome")
+        self.assertIsNone(lesson_scenario_for_page(reference_page))
 
     def test_dynamics_api_documents_playback_controls(self) -> None:
         page = next(page for page in DOCUMENTATION_PAGES if page.title == "Dynamics API")
@@ -498,6 +520,7 @@ class DocumentationTests(unittest.TestCase):
         self.assertIn("load_scenario_file", content)
         self.assertIn("list_example_scenarios", content)
         self.assertIn("get_example_scenario", content)
+        self.assertIn("Lesson state", content)
         self.assertIn("strong geometry", content.lower())
         self.assertIn("poor geometry", content.lower())
         self.assertIn("clock bias", content.lower())

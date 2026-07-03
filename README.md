@@ -75,6 +75,8 @@ Visualizer controls:
   pseudorange clock bias
 - Choose an Example scenario to load bundled labs for strong geometry, poor
   geometry, clock bias, atmospheric delay, and multipath
+- Use Lesson state from a milestone lesson to restore the matching classroom
+  scenario before running that lab
 - Use Save and Load in the scenario controls to write or restore a versioned
   `.gps-scenario.json` file with constellation, receiver, simulation time, and
   orbital speed
@@ -231,7 +233,8 @@ out-of-range classroom inputs produce actionable messages instead of partial
 state changes. It also ships bundled example scenarios for strong geometry,
 poor geometry, clock bias, atmospheric delay, and multipath. These examples
 are available through `list_example_scenarios()` and `get_example_scenario()`
-and can be loaded from the visualizer's scenario controls.
+and can be loaded from the visualizer's scenario controls or from a lesson's
+Lesson state action.
 The visualizer starts with an Aberdeen station using a 5-degree elevation mask
 and automatically redraws markers and links when stations are created, updated,
 or removed in the editor. Click any front-facing station marker to select it;
@@ -257,7 +260,9 @@ Position fixes, and accuracy experiments in Error and accuracy. Each milestone
 lesson also shows its path step and outcome. The app saves completed lessons,
 passed challenge checks, and the last open lesson to local application data.
 Lesson pages also provide runnable snippets that insert directly into the editor,
-giving each lab a ready-to-run starting point. Challenge pages add a Check
+giving each lab a ready-to-run starting point. Milestone lessons with scenario
+requirements include a Lesson state action that resets the visualizer to the
+matching bundled scenario before the lab starts. Challenge pages add a Check
 challenge action that catches syntax errors and missing required APIs before the
 student compares the script output with the lesson success check. Students can
 reset saved lesson progress from the documentation panel and reveal sample

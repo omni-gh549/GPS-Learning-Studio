@@ -170,6 +170,7 @@ class DocumentationPage:
     snippets: tuple[DocumentationSnippet, ...] = ()
     challenge_check: DocumentationChallengeCheck | None = None
     sample_solution: str | None = None
+    lesson_scenario_key: str | None = None
 
     @property
     def is_lesson(self) -> bool:
@@ -265,6 +266,14 @@ def learning_path_completion_summary(
     return complete, len(LEARNING_PATH)
 
 
+def lesson_scenario_for_page(page: DocumentationPage) -> VersionedScenario | None:
+    """Return the bundled starting scenario for a lesson page, if one is set."""
+
+    if page.lesson_scenario_key is None:
+        return None
+    return get_example_scenario(page.lesson_scenario_key).scenario
+
+
 def evaluate_documentation_challenge(
     page: DocumentationPage,
     source: str,
@@ -356,6 +365,7 @@ DOCUMENTATION_PAGES = (
         ),
         prerequisites=("No Python experience required.",),
         estimated_duration_minutes=5,
+        lesson_scenario_key="strong_geometry",
         snippets=(
             DocumentationSnippet(
                 "Read constellation telemetry",
@@ -477,7 +487,7 @@ DOCUMENTATION_PAGES = (
             ("Import", "import gps_sim.scenario_parameters as scenario_parameters\nimport gps_sim.scenarios as scenarios"),
             ("VersionedScenario(...)", "scenario = scenarios.VersionedScenario(\n    constellation=scenario_parameters.ConstellationParameters(satellite_count=6),\n    receiver=scenario_parameters.ReceiverParameters(clock_bias_microseconds=2.0),\n    simulation_time_seconds=600.0,\n    orbital_speed_multiplier=10.0,\n)\n\nA scenario captures the editable constellation, receiver, simulation timestamp, and orbital speed multiplier needed to reproduce a classroom starting state."),
             ("list_example_scenarios()", "for example in scenarios.list_example_scenarios():\n    print(example.name, example.description)\n\nThe bundled examples cover strong geometry, poor geometry, clock bias, atmospheric delay, and multipath labs. Each example provides a validated VersionedScenario and optional focus_error_sources for the matching Errors API experiment."),
-            ("get_example_scenario(...)", "example = scenarios.get_example_scenario(\"clock_bias\")\nscenario = example.scenario\nprint(scenario.receiver.clock_bias_microseconds)\n\nUse a key such as strong_geometry, poor_geometry, clock_bias, atmospheric_delay, or multipath to load the same classroom starting point from code or the visualizer."),
+            ("get_example_scenario(...)", "example = scenarios.get_example_scenario(\"clock_bias\")\nscenario = example.scenario\nprint(scenario.receiver.clock_bias_microseconds)\n\nUse a key such as strong_geometry, poor_geometry, clock_bias, atmospheric_delay, or multipath to load the same classroom starting point from code, the visualizer Example control, or a lesson's Lesson state action."),
             ("save_scenario_file(...)", "scenarios.save_scenario_file(path, scenario)\n\nWrites a formatted `.gps-scenario.json` file with an explicit schema_version field so future releases can migrate saved labs deliberately."),
             ("load_scenario_file(...)", "loaded = scenarios.load_scenario_file(path)\n\nLoads only supported schema versions and validates every constellation and receiver field before the visualizer applies the state. Invalid files raise ValueError with a focused message."),
         ),
@@ -587,6 +597,7 @@ DOCUMENTATION_PAGES = (
             "Visibility API",
         ),
         estimated_duration_minutes=15,
+        lesson_scenario_key="strong_geometry",
         snippets=(
             DocumentationSnippet(
                 "Find visible satellites",
@@ -731,6 +742,7 @@ DOCUMENTATION_PAGES = (
             "Positioning API",
         ),
         estimated_duration_minutes=20,
+        lesson_scenario_key="clock_bias",
         snippets=(
             DocumentationSnippet(
                 "Solve a clean four-satellite fix",
@@ -888,6 +900,7 @@ DOCUMENTATION_PAGES = (
             "Positioning API",
         ),
         estimated_duration_minutes=25,
+        lesson_scenario_key="atmospheric_delay",
         snippets=(
             DocumentationSnippet(
                 "Compare one error source",
@@ -1175,6 +1188,7 @@ class DocumentationPanel(tk.Frame):
         check_challenge_command=None,
         progress: DocumentationProgress | None = None,
         save_progress_command=None,
+        load_lesson_state_command=None,
     ):
         super().__init__(master, bg=PANEL, width=390)
         self.grid_propagate(False)
@@ -1188,6 +1202,7 @@ class DocumentationPanel(tk.Frame):
         self.insert_snippet_command = insert_snippet_command
         self.check_challenge_command = check_challenge_command
         self.save_progress_command = save_progress_command
+        self.load_lesson_state_command = load_lesson_state_command
         self.snippet_buttons: list[tk.Widget] = []
         self.revealed_solutions: set[str] = set()
 
@@ -1260,6 +1275,11 @@ class DocumentationPanel(tk.Frame):
             width=104, height=27,
         )
         self.solution_button.grid(row=1, column=1, sticky="e", padx=(8, 0), pady=(6, 0))
+        self.lesson_state_button = RoundedButton(
+            self.lesson_meta, "Lesson state", self._load_lesson_state,
+            width=104, height=27,
+        )
+        self.lesson_state_button.grid(row=1, column=2, sticky="e", padx=(8, 0), pady=(6, 0))
         self.completion_button = RoundedButton(
             self.lesson_meta, "Mark complete", self._toggle_completion,
             width=104, height=27,
@@ -1353,6 +1373,11 @@ class DocumentationPanel(tk.Frame):
         self.revealed_solutions.add(page.title)
         self.show_page(self.current_page)
 
+    def _load_lesson_state(self) -> None:
+        if self.load_lesson_state_command is None:
+            return
+        self.load_lesson_state_command(DOCUMENTATION_PAGES[self.current_page])
+
     def mark_challenge_completed(self, page: DocumentationPage) -> None:
         if page.challenge_check is None:
             return
@@ -1409,6 +1434,10 @@ class DocumentationPanel(tk.Frame):
             self.solution_button.grid()
         else:
             self.solution_button.grid_remove()
+        if page.lesson_scenario_key is not None and self.load_lesson_state_command is not None:
+            self.lesson_state_button.grid()
+        else:
+            self.lesson_state_button.grid_remove()
 
         self.body.configure(state="normal")
         for button in self.snippet_buttons:
@@ -1445,6 +1474,15 @@ class DocumentationPanel(tk.Frame):
             for objective in page.objectives:
                 self.body.insert("end", f"- {objective}\n", "body")
             self.body.insert("end", "\n", "body")
+            if page.lesson_scenario_key is not None:
+                example = get_example_scenario(page.lesson_scenario_key)
+                self.body.insert("end", "Lesson state\n", "heading")
+                self.body.insert(
+                    "end",
+                    f"Use Lesson state to reset the visualizer to {example.name}: "
+                    f"{example.description}\n\n",
+                    "body",
+                )
         if page.snippets:
             self.body.insert("end", "Runnable snippets\n", "heading")
             for snippet in page.snippets:
@@ -2742,6 +2780,7 @@ class OrbitStudio(tk.Tk):
             self.check_documentation_challenge,
             self.documentation_progress,
             self.save_documentation_progress,
+            self.load_documentation_lesson_state,
         )
         self.documentation_open = False
 
@@ -3377,6 +3416,21 @@ class OrbitStudio(tk.Tk):
         self._set_output("\n".join(lines) + "\n")
         if feedback.passed:
             self.documentation_panel.mark_challenge_completed(page)
+        self.editor.focus_set()
+
+    def load_documentation_lesson_state(self, page: DocumentationPage) -> None:
+        scenario = lesson_scenario_for_page(page)
+        if scenario is None:
+            self._set_output(f"{page.title} does not define a lesson scenario.\n")
+            return
+        self.visualizer.load_scenario(scenario)
+        self._sync_scenario_entry_vars()
+        self._refresh_simulation_controls(reschedule=False)
+        example = get_example_scenario(page.lesson_scenario_key or "")
+        self.scenario_status_var.set(f"Loaded lesson state: {page.title}")
+        self._set_output(
+            f"Loaded {page.title} lesson state from {example.name}.\n"
+        )
         self.editor.focus_set()
 
     def save_documentation_progress(self, progress: DocumentationProgress) -> None:
