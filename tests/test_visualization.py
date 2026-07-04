@@ -2,20 +2,102 @@ from __future__ import annotations
 
 import unittest
 
+from gps_sim.coordinates import CartesianPosition
 from gps_sim.ground_stations import GroundStation
+from gps_sim.scenario_parameters import SatelliteParameters
 from gps_sim.visualization import (
     AccuracyHistoryPoint,
     SatelliteSceneState,
     append_accuracy_history_point,
     build_accuracy_comparison_display,
     build_receiver_measurement_links,
+    build_satellite_display_states,
     build_receiver_position_fix_display,
     build_ground_station_scenes,
     build_station_visibility_rows,
+    display_position,
+    satellite_orbit_display_point,
+    satellite_scene_states,
+    satellite_telemetry,
 )
 
 
 class VisualizationTests(unittest.TestCase):
+    def test_builds_display_states_from_satellite_parameters(self) -> None:
+        parameters = (
+            SatelliteParameters(
+                satellite_id=3,
+                radius_meters=26_560_000.0,
+                inclination_degrees=55.0,
+                longitude_of_ascending_node_degrees=120.0,
+                orbital_angle_degrees=45.0,
+                orbital_period_seconds=7200.0,
+            ),
+        )
+
+        states = build_satellite_display_states(parameters, ("amber",))
+
+        self.assertEqual(len(states), 1)
+        self.assertEqual(states[0].satellite_id, 3)
+        self.assertEqual(states[0].color, "amber")
+        self.assertAlmostEqual(
+            states[0].angular_speed_radians_per_second,
+            2.0 * 3.141592653589793 / 7200.0,
+        )
+
+    def test_satellite_telemetry_and_scene_states_are_headless(self) -> None:
+        state = build_satellite_display_states(
+            (
+                SatelliteParameters(
+                    satellite_id=1,
+                    radius_meters=26_560_000.0,
+                    inclination_degrees=10.0,
+                    longitude_of_ascending_node_degrees=20.0,
+                    orbital_angle_degrees=30.0,
+                    orbital_period_seconds=360.0,
+                ),
+            )
+        )[0]
+
+        telemetry = satellite_telemetry((state,), elapsed_seconds=90.0)
+        scene_states = satellite_scene_states((state,), elapsed_seconds=90.0)
+
+        self.assertEqual(telemetry[0]["id"], 1)
+        self.assertEqual(telemetry[0]["inclination_degrees"], 10.0)
+        self.assertEqual(
+            telemetry[0]["longitude_of_ascending_node_degrees"],
+            20.0,
+        )
+        self.assertEqual(telemetry[0]["orbital_angle_degrees"], 120.0)
+        self.assertEqual(scene_states[0].satellite_id, 1)
+        self.assertAlmostEqual(scene_states[0].orbital_angle_degrees, 120.0)
+
+    def test_display_positions_and_orbit_points_are_headless(self) -> None:
+        state = build_satellite_display_states(
+            (
+                SatelliteParameters(
+                    satellite_id=1,
+                    radius_meters=26_560_000.0,
+                    inclination_degrees=0.0,
+                    longitude_of_ascending_node_degrees=0.0,
+                    orbital_angle_degrees=0.0,
+                    orbital_period_seconds=7200.0,
+                ),
+            )
+        )[0]
+
+        point = satellite_orbit_display_point(state, 0.0, scale=1.58)
+
+        self.assertAlmostEqual(point[0], 1.58)
+        self.assertAlmostEqual(point[1], 0.0)
+        self.assertAlmostEqual(point[2], 0.0)
+        self.assertEqual(
+            display_position(CartesianPosition(1.0, 0.0, 0.0), 2.0),
+            (2.0, 0.0, 0.0),
+        )
+        with self.assertRaisesRegex(ValueError, "magnitude"):
+            display_position(CartesianPosition(0.0, 0.0, 0.0), 1.0)
+
     def test_builds_station_marker_and_visible_overhead_link(self) -> None:
         station = GroundStation(0.0, 0.0, minimum_elevation_degrees=10.0)
         satellite = SatelliteSceneState(

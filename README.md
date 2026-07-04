@@ -117,6 +117,7 @@ import gps_sim.positioning as positioning
 import gps_sim.scenario_parameters as scenario_parameters
 import gps_sim.scenarios as scenarios
 import gps_sim.visibility as visibility
+import gps_sim.visualization as visualization
 
 print(constellation.get_satellite_states())
 print(constellation.get_satellite_count())
@@ -174,6 +175,10 @@ for example in scenarios.list_example_scenarios():
     print(example.key, example.name, example.focus_error_sources)
 clock_bias_lab = scenarios.get_example_scenario("clock_bias").scenario
 print(clock_bias_lab.receiver.clock_bias_microseconds)
+display_states = visualization.build_satellite_display_states(
+    scenario_parameters.build_satellite_parameters(clock_bias_lab.constellation)
+)
+print(visualization.satellite_telemetry(display_states, elapsed_seconds=600.0))
 observation = positioning.PseudorangeObservation(
     satellite_ecef=ecef,
     pseudorange_meters=reading.pseudorange_meters,
@@ -225,6 +230,12 @@ same per-source offsets, which makes accuracy experiments repeatable while
 still letting students compare different satellites or scenarios. Each standard
 source can be enabled, disabled, and scaled independently, so a lesson can
 isolate one component without changing the other sampled offsets.
+The visualization module keeps visualizer-ready geometry headless. It turns
+editable satellite parameters into propagated display states, normalizes
+orbit/station vectors for drawing, builds ground-station scene data, and
+prepares visibility rows, pseudorange links, receiver-fix panels, and accuracy
+history without creating a Tkinter window. The canvas layer consumes those
+models instead of owning orbital or coordinate calculations.
 The positioning module estimates receiver Earth-fixed x, y, z and receiver
 clock bias from four or more pseudorange observations. It uses a dependency-free
 iterative least-squares solver and raises clear diagnostics for insufficient or

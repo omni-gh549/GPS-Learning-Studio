@@ -19,11 +19,7 @@ from typing import Callable
 import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog
 
-from gps_sim.coordinates import (
-    CartesianPosition,
-    WGS84_SEMI_MAJOR_AXIS_METERS,
-    orbital_to_eci,
-)
+from gps_sim.coordinates import CartesianPosition
 from gps_sim.exports import (
     build_telemetry_export,
     save_telemetry_export_csv,
@@ -34,7 +30,6 @@ from gps_sim.runtime import bind_visualizer
 from gps_sim.scenario_parameters import (
     ConstellationParameters,
     ReceiverParameters,
-    SatelliteParameters,
     build_satellite_parameters,
 )
 from gps_sim.scenarios import (
@@ -51,12 +46,17 @@ from gps_sim.visualization import (
     AccuracyHistoryPoint,
     GroundStationScene,
     ReceiverPositionFixDisplay,
-    SatelliteSceneState,
+    SatelliteDisplayState,
     append_accuracy_history_point,
     build_accuracy_comparison_display,
     build_receiver_measurement_links,
+    build_satellite_display_states,
     build_ground_station_scenes,
     build_station_visibility_rows,
+    display_position,
+    satellite_orbit_display_point,
+    satellite_scene_states,
+    satellite_telemetry,
 )
 
 
@@ -72,7 +72,6 @@ SATELLITE_COLORS = ("#d7a86e", "#7db6a6", "#b58dc7", "#d6cc75")
 STATION = "#ef8f72"
 VISIBLE_LINK = "#86d5b4"
 MEASUREMENT_LINK = "#d6cc75"
-SATELLITE_ORBIT_RADIUS_METERS = WGS84_SEMI_MAJOR_AXIS_METERS * 1.58
 PROGRESS_SCHEMA_VERSION = 1
 
 SIMULATOR_COMPLETIONS = (
@@ -1553,32 +1552,6 @@ class DocumentationPanel(tk.Frame):
         self.body.yview_moveto(0)
 
 
-@dataclass
-class Satellite:
-    sat_id: int
-    radius_meters: float
-    inclination: float
-    node: float
-    phase: float
-    speed: float
-    color: str
-
-
-def satellite_from_parameters(
-    parameters: SatelliteParameters,
-    color: str,
-) -> Satellite:
-    return Satellite(
-        sat_id=parameters.satellite_id,
-        radius_meters=parameters.radius_meters,
-        inclination=math.radians(parameters.inclination_degrees),
-        node=math.radians(parameters.longitude_of_ascending_node_degrees),
-        phase=math.radians(parameters.orbital_angle_degrees),
-        speed=math.tau / parameters.orbital_period_seconds,
-        color=color,
-    )
-
-
 class EarthVisualizer(tk.Canvas):
     def __init__(self, master: tk.Misc):
         super().__init__(
@@ -1592,7 +1565,7 @@ class EarthVisualizer(tk.Canvas):
         self.earth_speed = 1.0
         self.last_frame_time = time.perf_counter()
         self._state_listeners: list[Callable[[], None]] = []
-        self.projected_satellites: list[tuple[float, float, Satellite]] = []
+        self.projected_satellites: list[tuple[float, float, SatelliteDisplayState]] = []
         self.projected_stations: list[tuple[float, float, str]] = []
         self.accuracy_history: tuple[AccuracyHistoryPoint, ...] = ()
         self.accuracy_history_station: str | None = None
@@ -1618,14 +1591,15 @@ class EarthVisualizer(tk.Canvas):
         self.after(33, self._animate)
 
     @staticmethod
-    def _build_satellites(parameters: ConstellationParameters) -> list[Satellite]:
-        return [
-            satellite_from_parameters(
-                satellite,
-                SATELLITE_COLORS[index % len(SATELLITE_COLORS)],
+    def _build_satellites(
+        parameters: ConstellationParameters,
+    ) -> list[SatelliteDisplayState]:
+        return list(
+            build_satellite_display_states(
+                build_satellite_parameters(parameters),
+                SATELLITE_COLORS,
             )
-            for index, satellite in enumerate(build_satellite_parameters(parameters))
-        ]
+        )
 
     def apply_scenario_parameters(
         self,
@@ -1654,7 +1628,7 @@ class EarthVisualizer(tk.Canvas):
     def selected_station_scene(self) -> GroundStationScene | None:
         elapsed = self.clock.state().simulation_seconds
         scenes = build_ground_station_scenes(
-            self._satellite_scene_states(elapsed),
+            satellite_scene_states(self.satellites, elapsed),
             list_stations(),
             math.degrees(self.earth_rotation),
         )
@@ -1763,17 +1737,7 @@ class EarthVisualizer(tk.Canvas):
 
     def satellite_data(self) -> list[dict[str, float | int]]:
         elapsed = self.clock.state().simulation_seconds
-        return [
-            {
-                "id": sat.sat_id,
-                "inclination_degrees": round(math.degrees(sat.inclination), 2),
-                "longitude_of_ascending_node_degrees": round(math.degrees(sat.node), 2),
-                "orbital_angle_degrees": round(
-                    math.degrees(sat.phase + elapsed * sat.speed) % 360, 2
-                ),
-            }
-            for sat in self.satellites
-        ]
+        return list(satellite_telemetry(self.satellites, elapsed))
 
     def _make_stars(self, event: tk.Event) -> None:
         rng = random.Random(7319)
@@ -1830,48 +1794,6 @@ class EarthVisualizer(tk.Canvas):
                 width=width, dash=dash, smooth=True,
             )
 
-    def _orbit_point(self, sat: Satellite, angle: float) -> tuple[float, float, float]:
-        position = orbital_to_eci(
-            sat.radius_meters,
-            math.degrees(sat.inclination),
-            math.degrees(sat.node),
-            math.degrees(angle),
-        )
-        return self._display_position(position, 1.58)
-
-    @staticmethod
-    def _display_position(
-        position: CartesianPosition,
-        scale: float,
-    ) -> tuple[float, float, float]:
-        magnitude = math.sqrt(
-            position.x_meters ** 2
-            + position.y_meters ** 2
-            + position.z_meters ** 2
-        )
-        return (
-            position.x_meters / magnitude * scale,
-            position.z_meters / magnitude * scale,
-            position.y_meters / magnitude * scale,
-        )
-
-    def _satellite_scene_states(
-        self,
-        elapsed: float,
-    ) -> tuple[SatelliteSceneState, ...]:
-        return tuple(
-            SatelliteSceneState(
-                satellite_id=sat.sat_id,
-                radius_meters=sat.radius_meters,
-                inclination_degrees=math.degrees(sat.inclination),
-                longitude_of_ascending_node_degrees=math.degrees(sat.node),
-                orbital_angle_degrees=math.degrees(
-                    sat.phase + elapsed * sat.speed
-                ),
-            )
-            for sat in self.satellites
-        )
-
     def _draw_scene(self) -> None:
         self.delete("all")
         width, height = self.winfo_width(), self.winfo_height()
@@ -1903,19 +1825,28 @@ class EarthVisualizer(tk.Canvas):
 
         elapsed = self.clock.state().simulation_seconds
         self.projected_satellites = []
-        draw_order: list[tuple[float, float, float, Satellite]] = []
+        draw_order: list[tuple[float, float, float, SatelliteDisplayState]] = []
         projected_satellites_by_id: dict[int, tuple[float, float, float]] = {}
         for sat in self.satellites:
-            orbit = [self._orbit_point(sat, index * math.pi / 64) for index in range(129)]
+            orbit = [
+                satellite_orbit_display_point(sat, index * 180.0 / 64.0, 1.58)
+                for index in range(129)
+            ]
             self._draw_curve(orbit, radius, ORBIT, 1.0, (3, 5))
-            angle = sat.phase + elapsed * sat.speed
-            sx, sy, sz = self._project(self._orbit_point(sat, angle), radius)
+            angle_degrees = (
+                sat.orbital_angle_degrees
+                + math.degrees(elapsed * sat.angular_speed_radians_per_second)
+            )
+            sx, sy, sz = self._project(
+                satellite_orbit_display_point(sat, angle_degrees, 1.58),
+                radius,
+            )
             draw_order.append((sz, sx, sy, sat))
-            projected_satellites_by_id[sat.sat_id] = (sx, sy, sz)
+            projected_satellites_by_id[sat.satellite_id] = (sx, sy, sz)
 
         earth_rotation_degrees = math.degrees(self.earth_rotation)
         station_scenes = build_ground_station_scenes(
-            self._satellite_scene_states(elapsed),
+            satellite_scene_states(self.satellites, elapsed),
             list_stations(),
             earth_rotation_degrees,
         )
@@ -1935,7 +1866,7 @@ class EarthVisualizer(tk.Canvas):
         self.projected_stations = []
         projected_stations = []
         for station_scene in station_scenes:
-            station_point = self._display_position(station_scene.station_ecef, 1.0)
+            station_point = display_position(station_scene.station_ecef, 1.0)
             station_x, station_y, station_depth = self._project(station_point, radius)
             projected_stations.append(
                 (station_depth, station_x, station_y, station_scene)
@@ -1966,14 +1897,14 @@ class EarthVisualizer(tk.Canvas):
             )
 
         for depth, sx, sy, sat in sorted(draw_order):
-            dot_radius = 5.5 if sat.sat_id == self.hovered_id else 4.0
+            dot_radius = 5.5 if sat.satellite_id == self.hovered_id else 4.0
             self.create_oval(
                 sx - dot_radius, sy - dot_radius, sx + dot_radius, sy + dot_radius,
                 fill=sat.color, outline="#e4e6e8", width=1,
             )
             self.projected_satellites.append((sx, sy, sat))
-            if sat.sat_id == self.hovered_id:
-                label = f"GLOBALSTAR {sat.sat_id}"
+            if sat.satellite_id == self.hovered_id:
+                label = f"GLOBALSTAR {sat.satellite_id}"
                 text_id = self.create_text(
                     sx + 13, sy - 16, text=label, fill=TEXT,
                     font=("Segoe UI", 9, "bold"), anchor="w",
@@ -2107,7 +2038,7 @@ class EarthVisualizer(tk.Canvas):
     ) -> None:
         if position_fix.estimated_receiver_ecef is None:
             return
-        estimated_point = self._display_position(
+        estimated_point = display_position(
             position_fix.estimated_receiver_ecef,
             1.0,
         )
@@ -2527,7 +2458,7 @@ class EarthVisualizer(tk.Canvas):
         for x, y, sat in self.projected_satellites:
             distance = math.hypot(event.x - x, event.y - y)
             if distance <= 13 and (nearest is None or distance < nearest[0]):
-                nearest = (distance, sat.sat_id)
+                nearest = (distance, sat.satellite_id)
         self.hovered_id = nearest[1] if nearest else None
 
     def _start_camera_drag(self, event: tk.Event) -> None:

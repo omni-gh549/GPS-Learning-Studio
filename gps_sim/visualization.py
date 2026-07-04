@@ -23,7 +23,25 @@ from .positioning import (
     calculate_position_error,
     solve_position,
 )
+from .scenario_parameters import SatelliteParameters
 from .visibility import VisibilityResult, calculate_visibility
+
+
+@dataclass(frozen=True)
+class SatelliteDisplayState:
+    """Visualizer-ready propagated satellite state."""
+
+    satellite_id: int
+    radius_meters: float
+    inclination_degrees: float
+    longitude_of_ascending_node_degrees: float
+    orbital_angle_degrees: float
+    orbital_period_seconds: float
+    color: str = ""
+
+    @property
+    def angular_speed_radians_per_second(self) -> float:
+        return math.tau / self.orbital_period_seconds
 
 
 @dataclass(frozen=True)
@@ -139,6 +157,119 @@ class AccuracyHistoryPoint:
 def _require_finite(name: str, value: float) -> None:
     if not math.isfinite(value):
         raise ValueError(f"{name} must be finite")
+
+
+def build_satellite_display_states(
+    satellite_parameters: Iterable[SatelliteParameters],
+    colors: Iterable[str] = (),
+) -> tuple[SatelliteDisplayState, ...]:
+    """Convert generated satellite parameters into propagated display states."""
+    palette = tuple(colors)
+    states = []
+    for index, satellite in enumerate(satellite_parameters):
+        color = palette[index % len(palette)] if palette else ""
+        states.append(
+            SatelliteDisplayState(
+                satellite_id=int(satellite.satellite_id),
+                radius_meters=float(satellite.radius_meters),
+                inclination_degrees=float(satellite.inclination_degrees),
+                longitude_of_ascending_node_degrees=float(
+                    satellite.longitude_of_ascending_node_degrees
+                ),
+                orbital_angle_degrees=float(satellite.orbital_angle_degrees),
+                orbital_period_seconds=float(satellite.orbital_period_seconds),
+                color=color,
+            )
+        )
+    return tuple(states)
+
+
+def satellite_telemetry(
+    satellites: Iterable[SatelliteDisplayState],
+    elapsed_seconds: float,
+) -> tuple[dict[str, float | int], ...]:
+    """Return public telemetry dictionaries for propagated satellite states."""
+    return tuple(
+        {
+            "id": satellite.satellite_id,
+            "inclination_degrees": round(satellite.inclination_degrees, 2),
+            "longitude_of_ascending_node_degrees": round(
+                satellite.longitude_of_ascending_node_degrees,
+                2,
+            ),
+            "orbital_angle_degrees": round(
+                (
+                    satellite.orbital_angle_degrees
+                    + math.degrees(
+                        elapsed_seconds
+                        * satellite.angular_speed_radians_per_second
+                    )
+                )
+                % 360.0,
+                2,
+            ),
+        }
+        for satellite in satellites
+    )
+
+
+def satellite_scene_states(
+    satellites: Iterable[SatelliteDisplayState],
+    elapsed_seconds: float,
+) -> tuple[SatelliteSceneState, ...]:
+    """Build scene states after propagating orbital angles by elapsed time."""
+    return tuple(
+        SatelliteSceneState(
+            satellite_id=satellite.satellite_id,
+            radius_meters=satellite.radius_meters,
+            inclination_degrees=satellite.inclination_degrees,
+            longitude_of_ascending_node_degrees=(
+                satellite.longitude_of_ascending_node_degrees
+            ),
+            orbital_angle_degrees=(
+                satellite.orbital_angle_degrees
+                + math.degrees(
+                    elapsed_seconds
+                    * satellite.angular_speed_radians_per_second
+                )
+            ),
+        )
+        for satellite in satellites
+    )
+
+
+def display_position(
+    position: CartesianPosition,
+    scale: float,
+) -> tuple[float, float, float]:
+    """Convert an ECI/ECEF vector into the visualizer's normalized axes."""
+    magnitude = math.sqrt(
+        position.x_meters ** 2
+        + position.y_meters ** 2
+        + position.z_meters ** 2
+    )
+    if magnitude == 0.0:
+        raise ValueError("position magnitude must be greater than zero")
+    return (
+        position.x_meters / magnitude * scale,
+        position.z_meters / magnitude * scale,
+        position.y_meters / magnitude * scale,
+    )
+
+
+def satellite_orbit_display_point(
+    satellite: SatelliteDisplayState,
+    orbital_angle_degrees: float,
+    scale: float,
+) -> tuple[float, float, float]:
+    """Return one display-space point along a satellite's circular orbit."""
+    position = orbital_to_eci(
+        satellite.radius_meters,
+        satellite.inclination_degrees,
+        satellite.longitude_of_ascending_node_degrees,
+        orbital_angle_degrees,
+    )
+    return display_position(position, scale)
 
 
 def build_station_visibility_rows(
@@ -353,13 +484,19 @@ __all__ = [
     "AccuracyHistoryPoint",
     "ReceiverMeasurementLink",
     "ReceiverPositionFixDisplay",
+    "SatelliteDisplayState",
     "SatelliteLink",
     "SatelliteSceneState",
     "StationVisibilityRow",
     "append_accuracy_history_point",
+    "build_satellite_display_states",
     "build_accuracy_comparison_display",
     "build_receiver_measurement_links",
     "build_receiver_position_fix_display",
     "build_ground_station_scenes",
     "build_station_visibility_rows",
+    "display_position",
+    "satellite_orbit_display_point",
+    "satellite_scene_states",
+    "satellite_telemetry",
 ]

@@ -143,7 +143,7 @@ Make experiments easier to set up, repeat, and share.
 
 ### Features
 
-- [ ] Move orbital and coordinate calculations out of `app.py` into headless model
+- [x] Move orbital and coordinate calculations out of `app.py` into headless model
   modules.
 - [ ] Separate simulation state from Tkinter rendering.
 - [ ] Add unit tests for dynamics, coordinates, visibility, measurements, solvers,
