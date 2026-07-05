@@ -267,6 +267,10 @@ rows, pseudorange measurements, clean position-fix metrics, seeded before/after
 accuracy results, and rolling 3D error-history samples. JSON keeps the nested
 experiment structure intact, while CSV flattens the same data into metric rows
 for spreadsheets.
+The core simulator modules are covered by headless unit tests: dynamics facade
+controls, coordinate transforms, visibility masks, range and pseudorange
+measurements, position solving and DOP metrics, deterministic error sources,
+and versioned scenario serialization all run without opening a Tkinter window.
 The visualizer starts with an Aberdeen station using a 5-degree elevation mask
 and automatically redraws markers and links when stations are created, updated,
 or removed in the editor. Click any front-facing station marker to select it;
