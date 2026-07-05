@@ -145,7 +145,7 @@ Make experiments easier to set up, repeat, and share.
 
 - [x] Move orbital and coordinate calculations out of `app.py` into headless model
   modules.
-- [ ] Separate simulation state from Tkinter rendering.
+- [x] Separate simulation state from Tkinter rendering.
 - [ ] Add unit tests for dynamics, coordinates, visibility, measurements, solvers,
   errors, and scenario serialization.
 - [ ] Add integration tests for the editor-facing API.

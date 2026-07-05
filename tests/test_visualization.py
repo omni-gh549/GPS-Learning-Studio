@@ -4,10 +4,17 @@ import unittest
 
 from gps_sim.coordinates import CartesianPosition
 from gps_sim.ground_stations import GroundStation
-from gps_sim.scenario_parameters import SatelliteParameters
+from gps_sim.scenario_parameters import (
+    ConstellationParameters,
+    ReceiverParameters,
+    SatelliteParameters,
+)
+from gps_sim.scenarios import VersionedScenario
+from gps_sim.simulation_time import SimulationClock
 from gps_sim.visualization import (
     AccuracyHistoryPoint,
     SatelliteSceneState,
+    SimulationStateModel,
     append_accuracy_history_point,
     build_accuracy_comparison_display,
     build_receiver_measurement_links,
@@ -23,6 +30,85 @@ from gps_sim.visualization import (
 
 
 class VisualizationTests(unittest.TestCase):
+    def test_simulation_state_model_builds_headless_frame(self) -> None:
+        model = SimulationStateModel(
+            satellite_colors=("red", "blue"),
+            clock=SimulationClock(is_playing=False, wall_time_seconds=0.0),
+            receiver_station_name="Model Test Receiver",
+        )
+
+        frame = model.build_frame()
+
+        self.assertEqual(4, len(frame.satellites))
+        self.assertEqual("red", frame.satellites[0].color)
+        self.assertGreaterEqual(len(frame.station_scenes), 1)
+        self.assertEqual("Model Test Receiver", frame.selected_station_scene.name)
+        self.assertIsNotNone(frame.accuracy_comparison)
+        self.assertEqual(1, len(frame.accuracy_history))
+        self.assertEqual(
+            model.export_scenario().receiver,
+            model.receiver_parameters,
+        )
+
+    def test_simulation_state_model_owns_earth_rotation_for_scenes(self) -> None:
+        model = SimulationStateModel(
+            clock=SimulationClock(is_playing=False, wall_time_seconds=0.0),
+            receiver_station_name="Rotation Model Receiver",
+        )
+        model.apply_scenario_parameters(
+            ConstellationParameters(
+                satellite_count=4,
+                inclination_degrees=0.0,
+                altitude_kilometers=20_200.0,
+            ),
+            ReceiverParameters(
+                latitude_degrees=0.0,
+                longitude_degrees=0.0,
+                minimum_elevation_degrees=0.0,
+            ),
+        )
+
+        overhead = model.build_frame(update_accuracy_history=False)
+        model.earth_rotation_degrees = 180.0
+        opposite = model.build_frame(update_accuracy_history=False)
+
+        self.assertTrue(
+            overhead.selected_station_scene.satellite_links[0].visibility.is_visible
+        )
+        self.assertFalse(
+            opposite.selected_station_scene.satellite_links[0].visibility.is_visible
+        )
+
+    def test_simulation_state_model_loads_scenario_without_tk(self) -> None:
+        model = SimulationStateModel(
+            clock=SimulationClock(is_playing=False, wall_time_seconds=0.0),
+            receiver_station_name="Scenario Model Receiver",
+        )
+        scenario = VersionedScenario(
+            constellation=ConstellationParameters(
+                satellite_count=6,
+                inclination_degrees=40.0,
+                altitude_kilometers=20_200.0,
+            ),
+            receiver=ReceiverParameters(
+                latitude_degrees=10.0,
+                longitude_degrees=20.0,
+                minimum_elevation_degrees=12.0,
+                clock_bias_microseconds=5.0,
+            ),
+            simulation_time_seconds=123.0,
+            orbital_speed_multiplier=7.0,
+        )
+
+        model.load_scenario(scenario, wall_time_seconds=0.0)
+        frame = model.build_frame(update_accuracy_history=False)
+
+        self.assertEqual(6, len(frame.satellites))
+        self.assertEqual(123.0, frame.elapsed_seconds)
+        self.assertEqual(7.0, model.clock.speed_multiplier)
+        self.assertEqual("Scenario Model Receiver", frame.selected_station_scene.name)
+        self.assertEqual(scenario, model.export_scenario())
+
     def test_builds_display_states_from_satellite_parameters(self) -> None:
         parameters = (
             SatelliteParameters(

@@ -25,12 +25,11 @@ from gps_sim.exports import (
     save_telemetry_export_csv,
     save_telemetry_export_json,
 )
-from gps_sim.ground_stations import create_station, list_stations, update_station
+from gps_sim.ground_stations import create_station, list_stations
 from gps_sim.runtime import bind_visualizer
 from gps_sim.scenario_parameters import (
     ConstellationParameters,
     ReceiverParameters,
-    build_satellite_parameters,
 )
 from gps_sim.scenarios import (
     VersionedScenario,
@@ -39,7 +38,6 @@ from gps_sim.scenarios import (
     load_scenario_file,
     save_scenario_file,
 )
-from gps_sim.simulation_time import SimulationClock
 from gps_sim.updater import CURRENT_VERSION, download_and_install, find_update, is_packaged
 from gps_sim.visualization import (
     AccuracyComparisonDisplay,
@@ -47,16 +45,11 @@ from gps_sim.visualization import (
     GroundStationScene,
     ReceiverPositionFixDisplay,
     SatelliteDisplayState,
-    append_accuracy_history_point,
-    build_accuracy_comparison_display,
     build_receiver_measurement_links,
-    build_satellite_display_states,
-    build_ground_station_scenes,
     build_station_visibility_rows,
     display_position,
     satellite_orbit_display_point,
-    satellite_scene_states,
-    satellite_telemetry,
+    SimulationStateModel,
 )
 
 
@@ -529,6 +522,7 @@ DOCUMENTATION_PAGES = (
             ("Measurement links", "Amber dashed links show the selected receiver's simplified pseudorange measurements to the satellites used by the position-fix display. Brighter amber means the satellite is above the station elevation mask; muted amber keeps below-mask observations visible for comparison."),
             ("Position fix", "The selected station also drives a simulated pseudorange fix. The receiver panel compares the true station position with the estimated position, clock bias, residual statistics, horizontal error, vertical error, and 3D error; a dashed yellow ring marks the estimated receiver on Earth."),
             ("Accuracy comparison", "The accuracy panel compares a clean before fix with an after fix that applies the seeded classroom error model, then plots both 3D position errors over time so students can see the error source change the solution."),
+            ("Architecture", "Simulation state, scenario loading, telemetry snapshots, and accuracy history are owned by a headless model. The Tkinter canvas consumes those snapshots for drawing, camera movement, hover labels, and station selection."),
             ("Time", "The satellites use classroom-scale orbital periods near 114 minutes. Increase the orbital time scale to make changes easier to observe during a lesson."),
         ),
     ),
@@ -1557,7 +1551,7 @@ class EarthVisualizer(tk.Canvas):
         super().__init__(
             master, bg=PANEL, highlightthickness=0, bd=0, cursor="crosshair"
         )
-        self.clock = SimulationClock()
+        self.model = SimulationStateModel(satellite_colors=SATELLITE_COLORS)
         self.earth_rotation = 0.0
         self.camera_yaw = 0.0
         self.camera_pitch = math.radians(18)
@@ -1567,21 +1561,9 @@ class EarthVisualizer(tk.Canvas):
         self._state_listeners: list[Callable[[], None]] = []
         self.projected_satellites: list[tuple[float, float, SatelliteDisplayState]] = []
         self.projected_stations: list[tuple[float, float, str]] = []
-        self.accuracy_history: tuple[AccuracyHistoryPoint, ...] = ()
-        self.accuracy_history_station: str | None = None
         self.hovered_id: int | None = None
-        self.selected_station_name: str | None = None
         self.camera_dragged = False
         self.stars: list[tuple[float, float, float]] = []
-        self.constellation_parameters = ConstellationParameters()
-        self.receiver_parameters = ReceiverParameters()
-        self.receiver_station_name = "Receiver"
-        self.receiver_clock_bias_seconds = (
-            self.receiver_parameters.clock_bias_seconds
-        )
-        self._apply_receiver_station(self.receiver_parameters)
-        self.selected_station_name = self.receiver_station_name
-        self.satellites = self._build_satellites(self.constellation_parameters)
         self.bind("<Configure>", self._make_stars)
         self.bind("<Motion>", self._on_motion)
         self.bind("<ButtonPress-1>", self._start_camera_drag)
@@ -1590,56 +1572,60 @@ class EarthVisualizer(tk.Canvas):
         self.bind("<Leave>", lambda _event: self._clear_hover())
         self.after(33, self._animate)
 
-    @staticmethod
-    def _build_satellites(
-        parameters: ConstellationParameters,
-    ) -> list[SatelliteDisplayState]:
-        return list(
-            build_satellite_display_states(
-                build_satellite_parameters(parameters),
-                SATELLITE_COLORS,
-            )
-        )
+    @property
+    def clock(self):
+        return self.model.clock
+
+    @property
+    def earth_rotation(self) -> float:
+        return math.radians(self.model.earth_rotation_degrees)
+
+    @earth_rotation.setter
+    def earth_rotation(self, value: float) -> None:
+        self.model.earth_rotation_degrees = math.degrees(value) % 360.0
+
+    @property
+    def constellation_parameters(self) -> ConstellationParameters:
+        return self.model.constellation_parameters
+
+    @property
+    def receiver_parameters(self) -> ReceiverParameters:
+        return self.model.receiver_parameters
+
+    @property
+    def receiver_clock_bias_seconds(self) -> float:
+        return self.model.receiver_clock_bias_seconds
+
+    @property
+    def satellites(self) -> tuple[SatelliteDisplayState, ...]:
+        return self.model.satellites
+
+    @property
+    def selected_station_name(self) -> str | None:
+        return self.model.selected_station_name
+
+    @selected_station_name.setter
+    def selected_station_name(self, value: str | None) -> None:
+        self.model.selected_station_name = value
+
+    @property
+    def accuracy_history(self) -> tuple[AccuracyHistoryPoint, ...]:
+        return self.model.accuracy_history
 
     def apply_scenario_parameters(
         self,
         constellation: ConstellationParameters,
         receiver: ReceiverParameters,
     ) -> None:
-        self.constellation_parameters = constellation
-        self.receiver_parameters = receiver
-        self.receiver_clock_bias_seconds = receiver.clock_bias_seconds
-        self._apply_receiver_station(receiver)
-        self.selected_station_name = self.receiver_station_name
-        self.satellites = self._build_satellites(constellation)
-        self.accuracy_history = ()
-        self.accuracy_history_station = None
+        self.model.apply_scenario_parameters(constellation, receiver)
         self._draw_scene()
         self._notify_state_listeners()
 
     def export_scenario(self) -> VersionedScenario:
-        return VersionedScenario(
-            constellation=self.constellation_parameters,
-            receiver=self.receiver_parameters,
-            simulation_time_seconds=self.clock.simulation_seconds,
-            orbital_speed_multiplier=self.clock.speed_multiplier,
-        )
+        return self.model.export_scenario()
 
     def selected_station_scene(self) -> GroundStationScene | None:
-        elapsed = self.clock.state().simulation_seconds
-        scenes = build_ground_station_scenes(
-            satellite_scene_states(self.satellites, elapsed),
-            list_stations(),
-            math.degrees(self.earth_rotation),
-        )
-        if not scenes:
-            return None
-        station_names = {scene.name for scene in scenes}
-        if self.selected_station_name not in station_names:
-            self.selected_station_name = scenes[0].name
-        return next(
-            scene for scene in scenes if scene.name == self.selected_station_name
-        )
+        return self.model.selected_station_scene()
 
     def export_telemetry(self) -> dict[str, object] | None:
         scene = self.selected_station_scene()
@@ -1659,27 +1645,9 @@ class EarthVisualizer(tk.Canvas):
         )
 
     def load_scenario(self, scenario: VersionedScenario) -> None:
-        self.apply_scenario_parameters(
-            scenario.constellation,
-            scenario.receiver,
-        )
-        wall_time = time.perf_counter()
-        self.clock.set_time(scenario.simulation_time_seconds, wall_time)
-        self.clock.set_speed(scenario.orbital_speed_multiplier, wall_time)
+        self.model.load_scenario(scenario, wall_time_seconds=time.perf_counter())
         self._draw_scene()
         self._notify_state_listeners()
-
-    def _apply_receiver_station(self, receiver: ReceiverParameters) -> None:
-        station_kwargs = {
-            "latitude_degrees": receiver.latitude_degrees,
-            "longitude_degrees": receiver.longitude_degrees,
-            "altitude_meters": receiver.altitude_meters,
-            "minimum_elevation_degrees": receiver.minimum_elevation_degrees,
-        }
-        if self.receiver_station_name in list_stations():
-            update_station(self.receiver_station_name, **station_kwargs)
-        else:
-            create_station(self.receiver_station_name, **station_kwargs)
 
     def add_state_listener(self, listener: Callable[[], None]) -> None:
         self._state_listeners.append(listener)
@@ -1689,55 +1657,52 @@ class EarthVisualizer(tk.Canvas):
             listener()
 
     def get_simulation_time(self) -> float:
-        return self.clock.state().simulation_seconds
+        return self.model.get_simulation_time()
 
     def play(self) -> None:
-        self.clock.play()
+        self.model.play()
         self._draw_scene()
         self._notify_state_listeners()
 
     def pause(self) -> None:
-        self.clock.pause()
+        self.model.pause()
         self._draw_scene()
         self._notify_state_listeners()
 
     def toggle_playback(self) -> bool:
-        is_playing = self.clock.toggle()
+        is_playing = self.model.toggle_playback()
         self._draw_scene()
         self._notify_state_listeners()
         return is_playing
 
     def step(self, seconds: float) -> None:
-        self.clock.step(seconds)
+        self.model.step(seconds)
         self._draw_scene()
         self._notify_state_listeners()
 
     def set_simulation_time(self, seconds: float) -> None:
-        self.clock.set_time(seconds)
+        self.model.set_simulation_time(seconds)
         self._draw_scene()
         self._notify_state_listeners()
 
     def set_orbit_speed(self, multiplier: float) -> None:
-        self.clock.set_speed(multiplier)
+        self.model.set_orbit_speed(multiplier)
         self._notify_state_listeners()
 
     def set_earth_speed(self, multiplier: float) -> None:
         self.earth_speed = max(0.0, float(multiplier))
 
     def reset(self) -> None:
-        self.clock.reset()
+        self.model.reset()
         self.earth_rotation = 0.0
         self.camera_yaw = 0.0
         self.camera_pitch = math.radians(18)
         self.earth_speed = 1.0
-        self.accuracy_history = ()
-        self.accuracy_history_station = None
         self._draw_scene()
         self._notify_state_listeners()
 
     def satellite_data(self) -> list[dict[str, float | int]]:
-        elapsed = self.clock.state().simulation_seconds
-        return list(satellite_telemetry(self.satellites, elapsed))
+        return self.model.satellite_data()
 
     def _make_stars(self, event: tk.Event) -> None:
         rng = random.Random(7319)
@@ -1823,11 +1788,12 @@ class EarthVisualizer(tk.Canvas):
             ]
             self._draw_curve(points, radius, "#526d7e")
 
-        elapsed = self.clock.state().simulation_seconds
+        frame = self.model.build_frame()
+        elapsed = frame.elapsed_seconds
         self.projected_satellites = []
         draw_order: list[tuple[float, float, float, SatelliteDisplayState]] = []
         projected_satellites_by_id: dict[int, tuple[float, float, float]] = {}
-        for sat in self.satellites:
+        for sat in frame.satellites:
             orbit = [
                 satellite_orbit_display_point(sat, index * 180.0 / 64.0, 1.58)
                 for index in range(129)
@@ -1844,25 +1810,8 @@ class EarthVisualizer(tk.Canvas):
             draw_order.append((sz, sx, sy, sat))
             projected_satellites_by_id[sat.satellite_id] = (sx, sy, sz)
 
-        earth_rotation_degrees = math.degrees(self.earth_rotation)
-        station_scenes = build_ground_station_scenes(
-            satellite_scene_states(self.satellites, elapsed),
-            list_stations(),
-            earth_rotation_degrees,
-        )
-        station_names = {scene.name for scene in station_scenes}
-        if self.selected_station_name not in station_names:
-            self.selected_station_name = (
-                station_scenes[0].name if station_scenes else None
-            )
-        selected_station_scene = next(
-            (
-                scene
-                for scene in station_scenes
-                if scene.name == self.selected_station_name
-            ),
-            None,
-        )
+        station_scenes = frame.station_scenes
+        selected_station_scene = frame.selected_station_scene
         self.projected_stations = []
         projected_stations = []
         for station_scene in station_scenes:
@@ -1955,23 +1904,14 @@ class EarthVisualizer(tk.Canvas):
             )
 
         if selected_station_scene is not None:
-            comparison = build_accuracy_comparison_display(
-                selected_station_scene,
-                receiver_clock_bias_seconds=self.receiver_clock_bias_seconds,
-            )
+            comparison = frame.accuracy_comparison
+            if comparison is None:
+                return
             position_fix = comparison.baseline
-            if self.accuracy_history_station != selected_station_scene.name:
-                self.accuracy_history = ()
-                self.accuracy_history_station = selected_station_scene.name
-            self.accuracy_history = append_accuracy_history_point(
-                self.accuracy_history,
-                elapsed_seconds=elapsed,
-                comparison=comparison,
-            )
             self._draw_estimated_receiver_marker(position_fix, radius)
             next_panel_y = self._draw_visibility_table(selected_station_scene)
             next_panel_y = self._draw_position_fix_panel(position_fix, next_panel_y)
-            self._draw_accuracy_panel(comparison, self.accuracy_history, next_panel_y)
+            self._draw_accuracy_panel(comparison, frame.accuracy_history, next_panel_y)
 
         self.create_text(18, 18, text="ORBITAL VIEW", anchor="nw", fill=MUTED,
                          font=("Segoe UI", 9, "bold"))
@@ -2444,7 +2384,7 @@ class EarthVisualizer(tk.Canvas):
         elapsed = min(0.1, now - self.last_frame_time)
         self.last_frame_time = now
         clock_was_playing = self.clock.is_playing
-        self.clock.tick(now)
+        self.model.tick(now)
         if clock_was_playing:
             self.earth_rotation += elapsed * (math.tau / 86164) * self.earth_speed
             self._draw_scene()
@@ -2488,7 +2428,7 @@ class EarthVisualizer(tk.Canvas):
                 ):
                     nearest = (distance, station_name)
             if nearest is not None:
-                self.selected_station_name = nearest[1]
+                self.model.select_station(nearest[1])
         self.drag_origin = None
         self.camera_dragged = False
         self.configure(cursor="crosshair")

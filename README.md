@@ -234,8 +234,10 @@ The visualization module keeps visualizer-ready geometry headless. It turns
 editable satellite parameters into propagated display states, normalizes
 orbit/station vectors for drawing, builds ground-station scene data, and
 prepares visibility rows, pseudorange links, receiver-fix panels, and accuracy
-history without creating a Tkinter window. The canvas layer consumes those
-models instead of owning orbital or coordinate calculations.
+history without creating a Tkinter window. Its `SimulationStateModel` owns
+playback, scenario parameters, selected station, generated satellites, telemetry
+snapshots, and accuracy history so the canvas layer can consume state snapshots
+instead of owning simulation state or orbital calculations.
 The positioning module estimates receiver Earth-fixed x, y, z and receiver
 clock bias from four or more pseudorange observations. It uses a dependency-free
 iterative least-squares solver and raises clear diagnostics for insufficient or

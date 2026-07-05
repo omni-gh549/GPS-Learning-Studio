@@ -506,6 +506,8 @@ class DocumentationTests(unittest.TestCase):
         self.assertIn("csv", content.lower())
         self.assertIn("units", content.lower())
         self.assertIn("simulation time", content.lower())
+        self.assertIn("headless model", content.lower())
+        self.assertIn("telemetry snapshots", content.lower())
         self.assertIn("Amber", content)
 
     def test_scenario_files_api_documents_versioned_save_load(self) -> None:
