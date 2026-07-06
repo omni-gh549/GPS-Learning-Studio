@@ -21,6 +21,15 @@ Double-click `launch.bat`, or run:
 python app.py
 ```
 
+## Test
+
+Run the full headless suite from the repository root with standard unittest
+discovery:
+
+```powershell
+python -m unittest discover -v
+```
+
 ## Windows executable and updates
 
 Build the portable executable with:
