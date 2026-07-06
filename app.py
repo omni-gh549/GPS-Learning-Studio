@@ -3435,14 +3435,11 @@ class OrbitStudio(tk.Tk):
         thread.start()
 
     def _execute(self, source: str) -> None:
-        stream = io.StringIO()
-        try:
-            with contextlib.redirect_stdout(stream), contextlib.redirect_stderr(stream):
-                exec(compile(source, str(self.current_file or "<orbit-studio>"), "exec"),
-                     self.execution_namespace, self.execution_namespace)
-        except BaseException:
-            traceback.print_exc(file=stream)
-        result = stream.getvalue() or "Finished with no output.\n"
+        result = execute_editor_source(
+            source,
+            self.execution_namespace,
+            filename=str(self.current_file or "<orbit-studio>"),
+        )
         self.output_queue.put(result)
 
     def _poll_output(self) -> None:
@@ -3458,6 +3455,27 @@ class OrbitStudio(tk.Tk):
         self.output.delete("1.0", "end")
         self.output.insert("1.0", content)
         self.output.configure(state="disabled")
+
+
+def execute_editor_source(
+    source: str,
+    execution_namespace: dict[str, object] | None = None,
+    *,
+    filename: str = "<orbit-studio>",
+) -> str:
+    """Run editor source with the same persistent namespace used by the UI."""
+    namespace = (
+        execution_namespace
+        if execution_namespace is not None
+        else {"__name__": "__main__"}
+    )
+    stream = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(stream), contextlib.redirect_stderr(stream):
+            exec(compile(source, filename, "exec"), namespace, namespace)
+    except BaseException:
+        traceback.print_exc(file=stream)
+    return stream.getvalue() or "Finished with no output.\n"
 
 
 def main() -> None:

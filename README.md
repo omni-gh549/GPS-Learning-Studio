@@ -271,6 +271,9 @@ The core simulator modules are covered by headless unit tests: dynamics facade
 controls, coordinate transforms, visibility masks, range and pseudorange
 measurements, position solving and DOP metrics, deterministic error sources,
 and versioned scenario serialization all run without opening a Tkinter window.
+Integration tests also execute editor-style scripts against the same public
+simulator imports and persistent namespace used by the app, so examples that
+call the constellation and dynamics APIs are covered without opening a window.
 The visualizer starts with an Aberdeen station using a 5-degree elevation mask
 and automatically redraws markers and links when stations are created, updated,
 or removed in the editor. Click any front-facing station marker to select it;

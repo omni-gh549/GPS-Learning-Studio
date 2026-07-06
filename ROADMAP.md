@@ -148,7 +148,7 @@ Make experiments easier to set up, repeat, and share.
 - [x] Separate simulation state from Tkinter rendering.
 - [x] Add unit tests for dynamics, coordinates, visibility, measurements, solvers,
   errors, and scenario serialization.
-- [ ] Add integration tests for the editor-facing API.
+- [x] Add integration tests for the editor-facing API.
 - [ ] Make standard test discovery run the full suite.
 - [ ] Run tests and executable smoke checks in GitHub Actions before publishing.
 - [ ] Add updater integrity verification using release checksums.
