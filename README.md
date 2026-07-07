@@ -40,8 +40,11 @@ pyinstaller --clean GPS-Learning-Studio.spec
 ```
 
 The result is `dist\GPS-Learning-Studio.exe`. Packaged builds check the latest
-GitHub Release shortly after startup and can download, replace, and restart
-themselves when a newer version is available.
+GitHub Release shortly after startup and can download, verify, replace, and
+restart themselves when a newer version is available. Releases must include both
+`GPS-Learning-Studio.exe` and `GPS-Learning-Studio.exe.sha256`; the updater
+verifies the downloaded executable's SHA-256 digest before the current
+executable can be replaced.
 
 Run the updater integration test with:
 
@@ -55,14 +58,16 @@ To publish a new version:
 2. Commit and push the feature.
 3. Tag the commit with the matching version, such as `v1.1.0`, and push the tag.
 
-The GitHub Actions release workflow builds the Windows executable and attaches
-it to the release automatically.
+The GitHub Actions release workflow builds the Windows executable, generates the
+`.sha256` checksum sidecar from that executable, and attaches both assets to the
+release automatically.
 
 The release workflow runs on version tags and can also be started manually from
 the Actions tab as a build-only check. It runs `python -m unittest discover -v`,
 builds `dist\GPS-Learning-Studio.exe`, runs the packaged
-`GPS-Learning-Studio.exe --smoke-test` check, and only creates the GitHub
-Release after those gates pass on a pushed `v*` tag.
+`GPS-Learning-Studio.exe --smoke-test` check, generates
+`GPS-Learning-Studio.exe.sha256`, and only creates the GitHub Release after
+those gates pass on a pushed `v*` tag.
 
 Editor shortcuts:
 

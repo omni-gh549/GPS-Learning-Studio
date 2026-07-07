@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import hashlib
 import subprocess
 import sys
 import tempfile
@@ -16,6 +17,7 @@ from pathlib import Path
 CURRENT_VERSION = "1.0.0"
 REPOSITORY = "omni-gh549/GPS-Learning-Studio"
 EXECUTABLE_ASSET = "GPS-Learning-Studio.exe"
+CHECKSUM_ASSET = f"{EXECUTABLE_ASSET}.sha256"
 RELEASES_API_URL = (
     f"https://api.github.com/repos/{REPOSITORY}/releases/latest"
 )
@@ -25,6 +27,7 @@ RELEASES_API_URL = (
 class Release:
     version: str
     download_url: str
+    checksum_url: str
     page_url: str
     notes: str
 
@@ -36,6 +39,40 @@ def is_packaged() -> bool:
 def _version_parts(version: str) -> tuple[int, ...]:
     clean = version.strip().lower().removeprefix("v").split("-", 1)[0]
     return tuple(int(part) for part in clean.split("."))
+
+
+def _asset_named(payload: dict, name: str) -> dict | None:
+    return next(
+        (item for item in payload.get("assets", []) if item.get("name") == name),
+        None,
+    )
+
+
+def parse_sha256_checksum(content: str) -> str:
+    first_line = next(
+        (line.strip() for line in content.splitlines() if line.strip()),
+        "",
+    )
+    checksum = first_line.split()[0] if first_line else ""
+    if len(checksum) != 64 or any(character not in "0123456789abcdefABCDEF" for character in checksum):
+        raise ValueError("Release checksum is not a valid SHA-256 digest.")
+    return checksum.lower()
+
+
+def calculate_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as file:
+        while chunk := file.read(1024 * 1024):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def verify_download_checksum(downloaded_executable: Path, expected_sha256: str) -> None:
+    actual_sha256 = calculate_sha256(downloaded_executable)
+    if actual_sha256 != expected_sha256.lower():
+        raise ValueError(
+            "Downloaded update failed SHA-256 verification; the executable was not replaced."
+        )
 
 
 def find_update(
@@ -59,11 +96,9 @@ def find_update(
             return None
         raise
 
-    asset = next(
-        (item for item in payload.get("assets", []) if item.get("name") == EXECUTABLE_ASSET),
-        None,
-    )
-    if not asset:
+    asset = _asset_named(payload, EXECUTABLE_ASSET)
+    checksum_asset = _asset_named(payload, CHECKSUM_ASSET)
+    if not asset or not checksum_asset:
         return None
 
     version = str(payload.get("tag_name", "")).removeprefix("v")
@@ -72,6 +107,7 @@ def find_update(
     return Release(
         version=version,
         download_url=asset["browser_download_url"],
+        checksum_url=checksum_asset["browser_download_url"],
         page_url=payload.get("html_url", ""),
         notes=payload.get("body", ""),
     )
@@ -93,6 +129,17 @@ def download_update(
         with download_path.open("wb") as destination:
             while chunk := response.read(1024 * 1024):
                 destination.write(chunk)
+    checksum_request = urllib.request.Request(
+        release.checksum_url,
+        headers={"User-Agent": f"GPS-Learning-Studio/{CURRENT_VERSION}"},
+    )
+    try:
+        with urllib.request.urlopen(checksum_request, timeout=timeout) as response:
+            expected_sha256 = parse_sha256_checksum(response.read().decode("utf-8"))
+        verify_download_checksum(download_path, expected_sha256)
+    except Exception:
+        download_path.unlink(missing_ok=True)
+        raise
     return download_path
 
 

@@ -35,6 +35,12 @@ jobs:
       - name: Smoke test packaged executable
         run: .\dist\GPS-Learning-Studio.exe --smoke-test
 
+      - name: Generate executable checksum
+        shell: pwsh
+        run: |
+          $hash = (Get-FileHash .\dist\GPS-Learning-Studio.exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  GPS-Learning-Studio.exe" | Set-Content -Encoding ascii .\dist\GPS-Learning-Studio.exe.sha256
+
       - name: Publish GitHub release
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
         env:
@@ -43,5 +49,6 @@ jobs:
         run: |
           gh release create $env:GITHUB_REF_NAME `
             .\dist\GPS-Learning-Studio.exe `
+            .\dist\GPS-Learning-Studio.exe.sha256 `
             --title $env:GITHUB_REF_NAME `
             --notes "Automated GPS Learning Studio release $env:GITHUB_REF_NAME."

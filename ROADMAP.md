@@ -151,7 +151,7 @@ Make experiments easier to set up, repeat, and share.
 - [x] Add integration tests for the editor-facing API.
 - [x] Make standard test discovery run the full suite.
 - [x] Run tests and executable smoke checks in GitHub Actions before publishing.
-- [ ] Add updater integrity verification using release checksums.
+- [x] Add updater integrity verification using release checksums.
 - [ ] Add structured release notes and migration handling for saved scenarios.
 
 ### Acceptance criteria

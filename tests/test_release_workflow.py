@@ -13,15 +13,20 @@ class ReleaseWorkflowTests(unittest.TestCase):
         test_command = "python -m unittest discover -v"
         build_command = "pyinstaller --clean GPS-Learning-Studio.spec"
         smoke_command = r".\dist\GPS-Learning-Studio.exe --smoke-test"
+        checksum_command = "Get-FileHash .\\dist\\GPS-Learning-Studio.exe -Algorithm SHA256"
+        checksum_asset = r".\dist\GPS-Learning-Studio.exe.sha256"
         release_command = "gh release create"
 
         self.assertIn(test_command, content)
         self.assertIn(build_command, content)
         self.assertIn(smoke_command, content)
+        self.assertIn(checksum_command, content)
+        self.assertIn(checksum_asset, content)
         self.assertIn(release_command, content)
         self.assertLess(content.index(test_command), content.index(build_command))
         self.assertLess(content.index(build_command), content.index(smoke_command))
-        self.assertLess(content.index(smoke_command), content.index(release_command))
+        self.assertLess(content.index(smoke_command), content.index(checksum_command))
+        self.assertLess(content.index(checksum_command), content.index(release_command))
         self.assertIn("if: github.event_name == 'push'", content)
 
     def test_packaged_smoke_entrypoint_is_documented_in_app(self) -> None:
