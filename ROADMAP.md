@@ -150,7 +150,7 @@ Make experiments easier to set up, repeat, and share.
   errors, and scenario serialization.
 - [x] Add integration tests for the editor-facing API.
 - [x] Make standard test discovery run the full suite.
-- [ ] Run tests and executable smoke checks in GitHub Actions before publishing.
+- [x] Run tests and executable smoke checks in GitHub Actions before publishing.
 - [ ] Add updater integrity verification using release checksums.
 - [ ] Add structured release notes and migration handling for saved scenarios.
 

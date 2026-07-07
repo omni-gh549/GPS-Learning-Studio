@@ -10,6 +10,7 @@ import os
 import queue
 import random
 import re
+import sys
 import threading
 import time
 import traceback
@@ -3478,7 +3479,62 @@ def execute_editor_source(
     return stream.getvalue() or "Finished with no output.\n"
 
 
+def run_smoke_test() -> int:
+    """Exercise headless startup dependencies for packaged release checks."""
+    from gps_sim import (
+        constellation,
+        coordinates,
+        dynamics,
+        errors,
+        exports,
+        ground_stations,
+        measurements,
+        positioning,
+        scenario_parameters,
+        scenarios,
+        simulation_time,
+        visibility,
+        visualization,
+    )
+
+    modules = (
+        constellation,
+        coordinates,
+        dynamics,
+        errors,
+        exports,
+        ground_stations,
+        measurements,
+        positioning,
+        scenario_parameters,
+        scenarios,
+        simulation_time,
+        visibility,
+        visualization,
+    )
+    missing = [module.__name__ for module in modules if module is None]
+    if missing:
+        print(f"Smoke test failed; missing modules: {', '.join(missing)}")
+        return 1
+
+    scenario = scenarios.get_example_scenario("strong_geometry").scenario
+    state = visualization.SimulationStateModel()
+    state.load_scenario(scenario)
+    frame = state.build_frame(update_accuracy_history=False)
+    if not frame.satellites or frame.selected_station_scene is None:
+        print("Smoke test failed; example scenario did not build a frame.")
+        return 1
+
+    print(
+        "GPS Learning Studio smoke test passed "
+        f"with {len(frame.satellites)} satellites."
+    )
+    return 0
+
+
 def main() -> None:
+    if "--smoke-test" in sys.argv[1:]:
+        raise SystemExit(run_smoke_test())
     app = OrbitStudio()
     app.mainloop()
 

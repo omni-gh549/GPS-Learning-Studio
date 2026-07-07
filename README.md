@@ -58,6 +58,12 @@ To publish a new version:
 The GitHub Actions release workflow builds the Windows executable and attaches
 it to the release automatically.
 
+The release workflow runs on version tags and can also be started manually from
+the Actions tab as a build-only check. It runs `python -m unittest discover -v`,
+builds `dist\GPS-Learning-Studio.exe`, runs the packaged
+`GPS-Learning-Studio.exe --smoke-test` check, and only creates the GitHub
+Release after those gates pass on a pushed `v*` tag.
+
 Editor shortcuts:
 
 - `F5`: run code
