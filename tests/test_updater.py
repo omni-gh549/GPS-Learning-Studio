@@ -119,6 +119,7 @@ class UpdaterIntegrationTests(unittest.TestCase):
             current_version="1.0.0",
         )
         self.assertIsNotNone(release)
+        self.assertEqual("Integration test release", release.notes.summary)
 
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

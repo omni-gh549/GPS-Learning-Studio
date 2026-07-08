@@ -39,6 +39,7 @@ from gps_sim.scenarios import (
     load_scenario_file,
     save_scenario_file,
 )
+from gps_sim.release_notes import format_release_notes
 from gps_sim.updater import CURRENT_VERSION, download_and_install, find_update, is_packaged
 from gps_sim.visualization import (
     AccuracyComparisonDisplay,
@@ -487,7 +488,8 @@ DOCUMENTATION_PAGES = (
             ("list_example_scenarios()", "for example in scenarios.list_example_scenarios():\n    print(example.name, example.description)\n\nThe bundled examples cover strong geometry, poor geometry, clock bias, atmospheric delay, and multipath labs. Each example provides a validated VersionedScenario and optional focus_error_sources for the matching Errors API experiment."),
             ("get_example_scenario(...)", "example = scenarios.get_example_scenario(\"clock_bias\")\nscenario = example.scenario\nprint(scenario.receiver.clock_bias_microseconds)\n\nUse a key such as strong_geometry, poor_geometry, clock_bias, atmospheric_delay, or multipath to load the same classroom starting point from code, the visualizer Example control, or a lesson's Lesson state action."),
             ("save_scenario_file(...)", "scenarios.save_scenario_file(path, scenario)\n\nWrites a formatted `.gps-scenario.json` file with an explicit schema_version field so future releases can migrate saved labs deliberately."),
-            ("load_scenario_file(...)", "loaded = scenarios.load_scenario_file(path)\n\nLoads only supported schema versions and validates every constellation and receiver field before the visualizer applies the state. Invalid files raise ValueError with a focused message."),
+            ("load_scenario_file(...)", "loaded = scenarios.load_scenario_file(path)\n\nLoads supported schema versions, migrates schema version 1 files to the current schema in memory, and validates every constellation and receiver field before the visualizer applies the state. Invalid files raise ValueError with a focused message."),
+            ("migrate_scenario_payload(...)", "migration = scenarios.migrate_scenario_payload(payload)\nprint(migration.original_schema_version, migration.schema_version)\nprint(migration.applied_migrations)\n\nUse this headless helper to inspect how an older saved scenario will be upgraded before applying it to a classroom visualizer."),
         ),
     ),
     DocumentationPage(
@@ -519,7 +521,7 @@ DOCUMENTATION_PAGES = (
             ("Camera", "Hold the left mouse button and drag to rotate the view around Earth."),
             ("Satellites", "Hover a satellite marker to display its Globalstar ID. Each colored marker follows its own inclined orbital plane."),
             ("Ground stations", "Orange markers show named stations. Click a front-facing marker to select it and inspect the live azimuth, elevation, range, and visibility table. Green dashed links connect stations to satellites at or above the elevation mask."),
-            ("Editable scenario", "Use the visualizer controls to change satellite count, inclination, orbital altitude, receiver latitude, receiver longitude, elevation mask, and receiver clock bias. Applying changes redraws the constellation and receiver fix. Example loads bundled classroom scenarios for strong geometry, poor geometry, clock bias, atmospheric delay, and multipath. Save writes a versioned scenario file; Load validates one and restores the constellation, receiver, simulation time, and orbital speed. Export writes selected-station telemetry, pseudorange measurements, position-fix metrics, and accuracy results as JSON or CSV with units and simulation timestamps."),
+            ("Editable scenario", "Use the visualizer controls to change satellite count, inclination, orbital altitude, receiver latitude, receiver longitude, elevation mask, and receiver clock bias. Applying changes redraws the constellation and receiver fix. Example loads bundled classroom scenarios for strong geometry, poor geometry, clock bias, atmospheric delay, and multipath. Save writes a versioned scenario file; Load validates one, migrates older supported schema versions, and restores the constellation, receiver, simulation time, and orbital speed. Export writes selected-station telemetry, pseudorange measurements, position-fix metrics, and accuracy results as JSON or CSV with units and simulation timestamps."),
             ("Measurement links", "Amber dashed links show the selected receiver's simplified pseudorange measurements to the satellites used by the position-fix display. Brighter amber means the satellite is above the station elevation mask; muted amber keeps below-mask observations visible for comparison."),
             ("Position fix", "The selected station also drives a simulated pseudorange fix. The receiver panel compares the true station position with the estimated position, clock bias, residual statistics, horizontal error, vertical error, and 3D error; a dashed yellow ring marks the estimated receiver on Earth."),
             ("Accuracy comparison", "The accuracy panel compares a clean before fix with an after fix that applies the seeded classroom error model, then plots both 3D position errors over time so students can see the error source change the solution."),
@@ -3317,9 +3319,12 @@ class OrbitStudio(tk.Tk):
                     parent=self,
                 )
             return
+        release_notes = format_release_notes(release.notes)
+        notes_text = f"\n\n{release_notes}\n\n" if release_notes else "\n\n"
         install = messagebox.askyesno(
             "Update available",
-            f"GPS Learning Studio v{release.version} is available.\n\n"
+            f"GPS Learning Studio v{release.version} is available."
+            f"{notes_text}"
             "Download, install, and restart now?",
             parent=self,
         )

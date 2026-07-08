@@ -60,7 +60,9 @@ To publish a new version:
 
 The GitHub Actions release workflow builds the Windows executable, generates the
 `.sha256` checksum sidecar from that executable, and attaches both assets to the
-release automatically.
+release automatically. Release notes are kept in `RELEASE_NOTES.md` with
+structured sections for changes, scenario migrations, and update safety; the
+packaged updater parses those sections before prompting users to install.
 
 The release workflow runs on version tags and can also be started manually from
 the Actions tab as a build-only check. It runs `python -m unittest discover -v`,
@@ -276,11 +278,13 @@ Each file stores the editable constellation, receiver, simulation timestamp,
 and orbital speed multiplier. Loading a file validates every value before it
 changes the visualizer, so unsupported schema versions, missing sections, and
 out-of-range classroom inputs produce actionable messages instead of partial
-state changes. It also ships bundled example scenarios for strong geometry,
-poor geometry, clock bias, atmospheric delay, and multipath. These examples
-are available through `list_example_scenarios()` and `get_example_scenario()`
-and can be loaded from the visualizer's scenario controls or from a lesson's
-Lesson state action.
+state changes. Current saves use schema version 2 with a metadata envelope, and
+schema version 1 files are migrated in memory when loaded so older classroom
+labs keep working. It also ships bundled example scenarios for strong geometry,
+poor geometry, clock bias, atmospheric delay, and multipath. These examples are
+available through `list_example_scenarios()` and `get_example_scenario()` and
+can be loaded from the visualizer's scenario controls or from a lesson's Lesson
+state action.
 The exports module writes the live classroom data students need for lab
 records: selected-station metadata, simulation timestamps, units, visibility
 rows, pseudorange measurements, clean position-fix metrics, seeded before/after

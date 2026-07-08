@@ -51,4 +51,4 @@ jobs:
             .\dist\GPS-Learning-Studio.exe `
             .\dist\GPS-Learning-Studio.exe.sha256 `
             --title $env:GITHUB_REF_NAME `
-            --notes "Automated GPS Learning Studio release $env:GITHUB_REF_NAME."
+            --notes-file RELEASE_NOTES.md

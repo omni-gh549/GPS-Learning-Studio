@@ -13,6 +13,8 @@ import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 
+from .release_notes import StructuredReleaseNotes, parse_release_notes
+
 
 CURRENT_VERSION = "1.0.0"
 REPOSITORY = "omni-gh549/GPS-Learning-Studio"
@@ -29,7 +31,7 @@ class Release:
     download_url: str
     checksum_url: str
     page_url: str
-    notes: str
+    notes: StructuredReleaseNotes
 
 
 def is_packaged() -> bool:
@@ -109,7 +111,7 @@ def find_update(
         download_url=asset["browser_download_url"],
         checksum_url=checksum_asset["browser_download_url"],
         page_url=payload.get("html_url", ""),
-        notes=payload.get("body", ""),
+        notes=parse_release_notes(payload.get("body", "")),
     )
 
 

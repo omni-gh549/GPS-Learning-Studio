@@ -523,6 +523,7 @@ class DocumentationTests(unittest.TestCase):
         self.assertIn("VersionedScenario", content)
         self.assertIn("save_scenario_file", content)
         self.assertIn("load_scenario_file", content)
+        self.assertIn("migrate_scenario_payload", content)
         self.assertIn("list_example_scenarios", content)
         self.assertIn("get_example_scenario", content)
         self.assertIn("Lesson state", content)
@@ -532,6 +533,7 @@ class DocumentationTests(unittest.TestCase):
         self.assertIn("atmospheric delay", content.lower())
         self.assertIn("multipath", content.lower())
         self.assertIn("schema_version", content)
+        self.assertIn("schema version 1", content.lower())
         self.assertIn("simulation timestamp", content.lower())
 
     def test_telemetry_exports_api_documents_json_csv_and_units(self) -> None:

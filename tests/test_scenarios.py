@@ -12,6 +12,7 @@ from gps_sim.scenarios import (
     get_example_scenario,
     list_example_scenarios,
     load_scenario_file,
+    migrate_scenario_payload,
     save_scenario_file,
     scenario_from_payload,
     scenario_to_payload,
@@ -56,10 +57,34 @@ class ScenarioFileTests(unittest.TestCase):
             loaded = load_scenario_file(path)
 
         self.assertEqual(SCENARIO_SCHEMA_VERSION, payload["schema_version"])
+        self.assertEqual(
+            "gps-learning-studio-scenario",
+            payload["metadata"]["format"],
+        )
         self.assertEqual(scenario, loaded)
 
+    def test_migrates_v1_payloads_to_current_schema(self) -> None:
+        scenario = VersionedScenario(
+            constellation=ConstellationParameters(satellite_count=6),
+            receiver=ReceiverParameters(clock_bias_microseconds=12.0),
+            simulation_time_seconds=42.0,
+            orbital_speed_multiplier=4.0,
+        )
+        payload = scenario_to_payload(scenario)
+        payload.pop("metadata")
+        payload["schema_version"] = 1
+
+        migration = migrate_scenario_payload(payload)
+        restored = scenario_from_payload(payload)
+
+        self.assertEqual(1, migration.original_schema_version)
+        self.assertEqual(SCENARIO_SCHEMA_VERSION, migration.schema_version)
+        self.assertEqual(("v1-to-v2 metadata envelope",), migration.applied_migrations)
+        self.assertEqual("gps-learning-studio-scenario", migration.payload["metadata"]["format"])
+        self.assertEqual(scenario, restored)
+
     def test_rejects_unsupported_schema_version(self) -> None:
-        with self.assertRaisesRegex(ValueError, "unsupported scenario schema version"):
+        with self.assertRaisesRegex(ValueError, "supported versions"):
             scenario_from_payload({"schema_version": 99})
 
     def test_rejects_missing_scenario_sections(self) -> None:

@@ -11,7 +11,8 @@ from typing import Any
 from .scenario_parameters import ConstellationParameters, ReceiverParameters
 
 
-SCENARIO_SCHEMA_VERSION = 1
+SCENARIO_SCHEMA_VERSION = 2
+SUPPORTED_SCENARIO_SCHEMA_VERSIONS = (1, SCENARIO_SCHEMA_VERSION)
 
 
 @dataclass(frozen=True)
@@ -32,6 +33,16 @@ class VersionedScenario:
             "orbital speed multiplier",
             self.orbital_speed_multiplier,
         )
+
+
+@dataclass(frozen=True)
+class ScenarioMigrationResult:
+    """Validated payload migration details for a saved scenario file."""
+
+    payload: dict[str, Any]
+    original_schema_version: int
+    schema_version: int
+    applied_migrations: tuple[str, ...]
 
 
 def _require_finite_non_negative(label: str, value: float) -> None:
@@ -197,6 +208,10 @@ def scenario_to_payload(scenario: VersionedScenario) -> dict[str, Any]:
 
     return {
         "schema_version": SCENARIO_SCHEMA_VERSION,
+        "metadata": {
+            "format": "gps-learning-studio-scenario",
+            "schema_name": "GPS Learning Studio saved scenario",
+        },
         "simulation_time_seconds": scenario.simulation_time_seconds,
         "orbital_speed_multiplier": scenario.orbital_speed_multiplier,
         "constellation": {
@@ -219,14 +234,8 @@ def scenario_to_payload(scenario: VersionedScenario) -> dict[str, Any]:
 def scenario_from_payload(payload: object) -> VersionedScenario:
     """Validate a JSON-like payload and return the corresponding scenario."""
 
-    if not isinstance(payload, dict):
-        raise ValueError("scenario file must contain a JSON object")
-    version = payload.get("schema_version")
-    if version != SCENARIO_SCHEMA_VERSION:
-        raise ValueError(
-            f"unsupported scenario schema version {version!r}; expected "
-            f"{SCENARIO_SCHEMA_VERSION}"
-        )
+    migration = migrate_scenario_payload(payload)
+    payload = migration.payload
 
     constellation = _required_mapping(payload, "constellation")
     receiver = _required_mapping(payload, "receiver")
@@ -261,6 +270,47 @@ def scenario_from_payload(payload: object) -> VersionedScenario:
         )
     except (TypeError, ValueError) as error:
         raise ValueError(f"invalid scenario file: {error}") from error
+
+
+def migrate_scenario_payload(payload: object) -> ScenarioMigrationResult:
+    """Return a current-schema scenario payload, migrating supported old files."""
+
+    if not isinstance(payload, dict):
+        raise ValueError("scenario file must contain a JSON object")
+    version = payload.get("schema_version")
+    if version not in SUPPORTED_SCENARIO_SCHEMA_VERSIONS:
+        raise ValueError(
+            f"unsupported scenario schema version {version!r}; supported versions "
+            f"are {SUPPORTED_SCENARIO_SCHEMA_VERSIONS}"
+        )
+    if version == SCENARIO_SCHEMA_VERSION:
+        return ScenarioMigrationResult(
+            payload=dict(payload),
+            original_schema_version=SCENARIO_SCHEMA_VERSION,
+            schema_version=SCENARIO_SCHEMA_VERSION,
+            applied_migrations=(),
+        )
+
+    migrated = dict(payload)
+    applied_migrations: tuple[str, ...] = ()
+    if version == 1:
+        migrated["schema_version"] = 2
+        migrated.setdefault(
+            "metadata",
+            {
+                "format": "gps-learning-studio-scenario",
+                "schema_name": "GPS Learning Studio saved scenario",
+                "migrated_from_schema_version": 1,
+            },
+        )
+        applied_migrations = ("v1-to-v2 metadata envelope",)
+
+    return ScenarioMigrationResult(
+        payload=migrated,
+        original_schema_version=int(version),
+        schema_version=SCENARIO_SCHEMA_VERSION,
+        applied_migrations=applied_migrations,
+    )
 
 
 def save_scenario_file(path: Path, scenario: VersionedScenario) -> None:
@@ -302,10 +352,13 @@ __all__ = [
     "EXAMPLE_SCENARIOS",
     "ExampleScenario",
     "SCENARIO_SCHEMA_VERSION",
+    "SUPPORTED_SCENARIO_SCHEMA_VERSIONS",
+    "ScenarioMigrationResult",
     "VersionedScenario",
     "get_example_scenario",
     "list_example_scenarios",
     "load_scenario_file",
+    "migrate_scenario_payload",
     "save_scenario_file",
     "scenario_from_payload",
     "scenario_to_payload",

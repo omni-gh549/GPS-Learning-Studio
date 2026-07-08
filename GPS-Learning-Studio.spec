@@ -14,6 +14,7 @@ a = Analysis(
         "gps_sim.ground_stations",
         "gps_sim.measurements",
         "gps_sim.positioning",
+        "gps_sim.release_notes",
         "gps_sim.runtime",
         "gps_sim.scenario_parameters",
         "gps_sim.scenarios",
